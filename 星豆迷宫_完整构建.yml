@@ -1,0 +1,3539 @@
+name: 构建星豆迷宫 APK
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xingdou-maze-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 Android 36 编译组件
+        shell: bash
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: 配置 Gradle 9.4.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.4.1"
+
+      - name: 生成完整 Android 游戏工程
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          mkdir -p generated-game/app/src/main/java/com/qi/xingdoumaze
+          mkdir -p generated-game/app/src/main/res/values
+          mkdir -p generated-game/app/src/main/res/drawable
+
+          cat > generated-game/settings.gradle <<'SETTINGS'
+          import org.gradle.api.initialization.resolve.RepositoriesMode
+          
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          
+          rootProject.name = '星豆迷宫'
+          include ':app'
+          SETTINGS
+
+          cat > generated-game/build.gradle <<'ROOT_GRADLE'
+          plugins {
+              id 'com.android.application' version '9.2.1' apply false
+          }
+          ROOT_GRADLE
+
+          cat > generated-game/gradle.properties <<'GRADLE_PROPERTIES'
+          org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
+          org.gradle.daemon=false
+          org.gradle.parallel=true
+          org.gradle.caching=true
+          org.gradle.configuration-cache=true
+          android.useAndroidX=false
+          android.nonTransitiveRClass=true
+          GRADLE_PROPERTIES
+
+          cat > generated-game/app/build.gradle <<'APP_GRADLE'
+          plugins {
+              id 'com.android.application'
+          }
+          
+          android {
+              namespace = 'com.qi.xingdoumaze'
+              compileSdk = 36
+          
+              defaultConfig {
+                  applicationId = 'com.qi.xingdoumaze'
+                  minSdk = 24
+                  targetSdk = 36
+                  versionCode = 1
+                  versionName = '1.0.0'
+              }
+          
+              buildTypes {
+                  debug {
+                      minifyEnabled = false
+                  }
+                  release {
+                      minifyEnabled = false
+                  }
+              }
+          
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+          
+              buildFeatures {
+                  buildConfig = false
+              }
+          
+              lint {
+                  abortOnError = true
+                  checkReleaseBuilds = false
+              }
+          }
+          APP_GRADLE
+
+          cat > generated-game/app/src/main/AndroidManifest.xml <<'MANIFEST'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.VIBRATE" />
+          
+              <application
+                  android:allowBackup="true"
+                  android:hardwareAccelerated="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme"
+                  android:usesCleartextTraffic="false">
+                  <activity
+                      android:name=".MainActivity"
+                      android:configChanges="orientation|screenSize|keyboardHidden"
+                      android:exported="true"
+                      android:screenOrientation="portrait">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          MANIFEST
+
+          cat > generated-game/app/src/main/res/values/strings.xml <<'STRINGS'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">星豆迷宫</string>
+          </resources>
+          STRINGS
+
+          cat > generated-game/app/src/main/res/values/styles.xml <<'STYLES'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:windowFullscreen">true</item>
+                  <item name="android:windowNoTitle">true</item>
+                  <item name="android:windowActionModeOverlay">true</item>
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#FFC857</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#000000</item>
+                  <item name="android:windowBackground">#10052E</item>
+              </style>
+          </resources>
+          STYLES
+
+          cat > generated-game/app/src/main/res/drawable/ic_launcher.xml <<'ICON'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#15102E" android:pathData="M0,0h108v108h-108z" />
+              <path android:fillColor="#5B2D90" android:pathData="M8,8h92a8,8 0,0 1,8 8v76a8,8 0,0 1,-8 8h-92a8,8 0,0 1,-8 -8v-76a8,8 0,0 1,8 -8z" />
+              <path android:fillColor="#FFD43B" android:pathData="M43,20A34,34 0,1 0,75 66L43,54L75,42A34,34 0,0 0,43 20z" />
+              <path android:fillColor="#241B35" android:pathData="M42,35a4,4 0,1 0,0.1 0z" />
+              <path android:fillColor="#FFC857" android:pathData="M86,46l2.7,5.5l6.1,0.9l-4.4,4.3l1,6.1l-5.4,-2.9l-5.4,2.9l1,-6.1l-4.4,-4.3l6.1,-0.9z" />
+              <path android:fillColor="#6CE6FF" android:pathData="M84,74a5,5 0,1 0,0.1 0z" />
+              <path android:fillColor="#FF78B7" android:pathData="M96,72a3.5,3.5 0,1 0,0.1 0z" />
+          </vector>
+          ICON
+
+          cat > generated-game/app/src/main/java/com/qi/xingdoumaze/MainActivity.java <<'MAIN_ACTIVITY'
+          package com.qi.xingdoumaze;
+          
+          import android.app.Activity;
+          import android.content.pm.ActivityInfo;
+          import android.graphics.Color;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.View;
+          import android.view.WindowInsets;
+          import android.view.WindowInsetsController;
+          
+          public final class MainActivity extends Activity {
+              private GameView gameView;
+          
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+                  getWindow().setStatusBarColor(Color.TRANSPARENT);
+                  getWindow().setNavigationBarColor(Color.BLACK);
+                  enterImmersiveMode();
+                  gameView = new GameView(this);
+                  setContentView(gameView);
+              }
+          
+              private void enterImmersiveMode() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      getWindow().setDecorFitsSystemWindows(false);
+                      WindowInsetsController controller = getWindow().getInsetsController();
+                      if (controller != null) {
+                          controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                          controller.setSystemBarsBehavior(
+                                  WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                      }
+                  } else {
+                      getWindow().getDecorView().setSystemUiVisibility(
+                              View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                                      | View.SYSTEM_UI_FLAG_FULLSCREEN
+                                      | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                      | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                                      | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                                      | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+                  }
+              }
+          
+              @Override
+              protected void onResume() {
+                  super.onResume();
+                  enterImmersiveMode();
+                  if (gameView != null) gameView.resumeFromSystem();
+              }
+          
+              @Override
+              protected void onPause() {
+                  if (gameView != null) gameView.pauseFromSystem();
+                  super.onPause();
+              }
+          
+              @Override
+              public void onBackPressed() {
+                  if (gameView == null || !gameView.handleBack()) super.onBackPressed();
+              }
+          }
+          MAIN_ACTIVITY
+
+          cat > generated-game/app/src/main/java/com/qi/xingdoumaze/MazeGenerator.java <<'MAZE_GENERATOR'
+          package com.qi.xingdoumaze;
+          
+          import java.util.ArrayDeque;
+          import java.util.ArrayList;
+          import java.util.Arrays;
+          import java.util.Collections;
+          import java.util.List;
+          import java.util.Random;
+          
+          /**
+           * 先生成连通迷宫，再按主题增加环路与安全通道。
+           * 迷宫坐标固定为 25x29，奇数坐标是逻辑格，偶数坐标是格间墙。
+           */
+          final class MazeGenerator {
+              static final int COLS = 25;
+              static final int ROWS = 29;
+          
+              static final class Result {
+                  final boolean[][] walls;
+                  final int playerX;
+                  final int playerY;
+                  final int[][] enemySpawns;
+                  final int companionX;
+                  final int companionY;
+                  final long signature;
+          
+                  Result(boolean[][] walls, int playerX, int playerY, int[][] enemySpawns,
+                         int companionX, int companionY, long signature) {
+                      this.walls = walls;
+                      this.playerX = playerX;
+                      this.playerY = playerY;
+                      this.enemySpawns = enemySpawns;
+                      this.companionX = companionX;
+                      this.companionY = companionY;
+                      this.signature = signature;
+                  }
+              }
+          
+              private MazeGenerator() {}
+          
+              static Result generate(int theme, long seed) {
+                  for (int attempt = 0; attempt < 24; attempt++) {
+                      Random random = new Random(seed + 0x9E3779B97F4A7C15L * attempt);
+                      boolean[][] walls = filledWalls();
+          
+                      if (theme == 1) {
+                          carveClassicSymmetric(walls, random);
+                      } else {
+                          carvePerfectMaze(walls, random);
+                          addLoops(walls, random, theme == 2 ? 44 : 30 + random.nextInt(13));
+                      }
+          
+                      carveSpawnSafety(walls);
+                      if (theme == 0) carveClownArena(walls);
+                      if (theme == 1) carveClassicDetails(walls, random);
+                      if (theme == 2) carveOceanEscapeGrid(walls);
+                      if (theme == 3) carveSpringSquares(walls, random);
+                      if (theme == 4) carveGalaxyCore(walls);
+          
+                      sealBorderExceptClassicTunnel(walls, theme == 1);
+                      pruneUnreachable(walls, 1, ROWS - 2);
+                      carveSpawnSafety(walls);
+          
+                      if (countFloors(walls) < 245 || !allFloorsConnected(walls, 1, ROWS - 2)) {
+                          continue;
+                      }
+                      if (theme == 2 && maxOceanEscapeDistance(walls) > 20) {
+                          continue;
+                      }
+          
+                      int[][] spawns = chooseEnemySpawns(walls, theme, random);
+                      int[] companion = nearestFloor(walls, 4, ROWS - 2, null);
+                      return new Result(walls, 1, ROWS - 2, spawns,
+                              companion[0], companion[1], signature(walls));
+                  }
+          
+                  // 极端情况下使用仍然连通的保底迷宫，避免启动失败。
+                  boolean[][] fallback = filledWalls();
+                  carveFallback(fallback);
+                  int[][] spawns = chooseEnemySpawns(fallback, theme, new Random(seed));
+                  int[] companion = nearestFloor(fallback, 4, ROWS - 2, null);
+                  return new Result(fallback, 1, ROWS - 2, spawns,
+                          companion[0], companion[1], signature(fallback));
+              }
+          
+              private static boolean[][] filledWalls() {
+                  boolean[][] out = new boolean[ROWS][COLS];
+                  for (boolean[] row : out) Arrays.fill(row, true);
+                  return out;
+              }
+          
+              private static void carvePerfectMaze(boolean[][] walls, Random random) {
+                  final int logicalW = (COLS - 1) / 2;
+                  final int logicalH = (ROWS - 1) / 2;
+                  boolean[][] visited = new boolean[logicalH][logicalW];
+                  ArrayDeque<int[]> stack = new ArrayDeque<>();
+                  int sx = random.nextInt(logicalW);
+                  int sy = random.nextInt(logicalH);
+                  visited[sy][sx] = true;
+                  walls[sy * 2 + 1][sx * 2 + 1] = false;
+                  stack.push(new int[]{sx, sy});
+          
+                  int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+                  while (!stack.isEmpty()) {
+                      int[] cur = stack.peek();
+                      List<int[]> choices = new ArrayList<>(4);
+                      for (int[] d : dirs) {
+                          int nx = cur[0] + d[0];
+                          int ny = cur[1] + d[1];
+                          if (nx >= 0 && nx < logicalW && ny >= 0 && ny < logicalH && !visited[ny][nx]) {
+                              choices.add(new int[]{nx, ny, d[0], d[1]});
+                          }
+                      }
+                      if (choices.isEmpty()) {
+                          stack.pop();
+                          continue;
+                      }
+                      int[] next = choices.get(random.nextInt(choices.size()));
+                      int cx = cur[0] * 2 + 1;
+                      int cy = cur[1] * 2 + 1;
+                      walls[cy + next[3]][cx + next[2]] = false;
+                      walls[next[1] * 2 + 1][next[0] * 2 + 1] = false;
+                      visited[next[1]][next[0]] = true;
+                      stack.push(new int[]{next[0], next[1]});
+                  }
+              }
+          
+              private static void carveClassicSymmetric(boolean[][] walls, Random random) {
+                  final int logicalW = 6;
+                  final int logicalH = (ROWS - 1) / 2;
+                  boolean[][] visited = new boolean[logicalH][logicalW];
+                  ArrayDeque<int[]> stack = new ArrayDeque<>();
+                  int sx = random.nextInt(logicalW);
+                  int sy = random.nextInt(logicalH);
+                  visited[sy][sx] = true;
+                  walls[sy * 2 + 1][sx * 2 + 1] = false;
+                  stack.push(new int[]{sx, sy});
+                  int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+          
+                  while (!stack.isEmpty()) {
+                      int[] cur = stack.peek();
+                      List<int[]> choices = new ArrayList<>(4);
+                      for (int[] d : dirs) {
+                          int nx = cur[0] + d[0];
+                          int ny = cur[1] + d[1];
+                          if (nx >= 0 && nx < logicalW && ny >= 0 && ny < logicalH && !visited[ny][nx]) {
+                              choices.add(new int[]{nx, ny, d[0], d[1]});
+                          }
+                      }
+                      if (choices.isEmpty()) {
+                          stack.pop();
+                          continue;
+                      }
+                      int[] n = choices.get(random.nextInt(choices.size()));
+                      int cx = cur[0] * 2 + 1;
+                      int cy = cur[1] * 2 + 1;
+                      walls[cy + n[3]][cx + n[2]] = false;
+                      walls[n[1] * 2 + 1][n[0] * 2 + 1] = false;
+                      visited[n[1]][n[0]] = true;
+                      stack.push(new int[]{n[0], n[1]});
+                  }
+          
+                  for (int y = 0; y < ROWS; y++) {
+                      for (int x = 0; x <= 11; x++) walls[y][COLS - 1 - x] = walls[y][x];
+                  }
+                  int[] bridges = {3, 9, 15, 21, 27};
+                  int skipped = random.nextInt(bridges.length - 1);
+                  for (int i = 0; i < bridges.length; i++) {
+                      if (i == skipped) continue;
+                      int y = bridges[i];
+                      walls[y][11] = false;
+                      walls[y][12] = false;
+                      walls[y][13] = false;
+                  }
+                  addLoops(walls, random, 18);
+              }
+          
+              private static void addLoops(boolean[][] walls, Random random, int wanted) {
+                  List<int[]> candidates = new ArrayList<>();
+                  for (int y = 1; y < ROWS - 1; y++) {
+                      for (int x = 1; x < COLS - 1; x++) {
+                          if (!walls[y][x]) continue;
+                          boolean horizontal = !walls[y][x - 1] && !walls[y][x + 1];
+                          boolean vertical = !walls[y - 1][x] && !walls[y + 1][x];
+                          if (horizontal ^ vertical) candidates.add(new int[]{x, y});
+                      }
+                  }
+                  Collections.shuffle(candidates, random);
+                  for (int i = 0; i < Math.min(wanted, candidates.size()); i++) {
+                      int[] p = candidates.get(i);
+                      walls[p[1]][p[0]] = false;
+                  }
+              }
+          
+              private static void carveSpawnSafety(boolean[][] walls) {
+                  int y = ROWS - 2;
+                  for (int x = 1; x <= 6; x++) walls[y][x] = false;
+                  for (int x = 1; x <= 5; x++) walls[y - 2][x] = false;
+                  for (int yy = y - 2; yy <= y; yy++) {
+                      walls[yy][1] = false;
+                      walls[yy][5] = false;
+                  }
+              }
+          
+              private static void carveClownArena(boolean[][] walls) {
+                  for (int y = 12; y <= 16; y++) {
+                      for (int x = 10; x <= 14; x++) walls[y][x] = false;
+                  }
+                  for (int y = 13; y <= 15; y++) {
+                      for (int x = 11; x <= 13; x++) walls[y][x] = true;
+                  }
+                  for (int x = 8; x <= 16; x++) {
+                      walls[12][x] = false;
+                      walls[16][x] = false;
+                  }
+                  for (int y = 10; y <= 18; y++) {
+                      walls[y][10] = false;
+                      walls[y][14] = false;
+                  }
+              }
+          
+              private static void carveClassicDetails(boolean[][] walls, Random random) {
+                  // 中央幽灵房与左右隧道保留经典轮廓，但桥位和支路每局变化。
+                  for (int y = 12; y <= 16; y++) {
+                      for (int x = 9; x <= 15; x++) walls[y][x] = false;
+                  }
+                  walls[12][9] = walls[12][10] = walls[12][14] = walls[12][15] = true;
+                  walls[16][9] = walls[16][10] = walls[16][14] = walls[16][15] = true;
+                  int tunnelY = 13;
+                  for (int x = 0; x <= 9; x++) walls[tunnelY][x] = false;
+                  for (int x = 15; x < COLS; x++) walls[tunnelY][x] = false;
+                  for (int i = 0; i < 4; i++) {
+                      int y = 3 + random.nextInt(12) * 2;
+                      walls[y][12] = false;
+                  }
+              }
+          
+              private static void carveOceanEscapeGrid(boolean[][] walls) {
+                  int[] vertical = {3, 9, 15, 21};
+                  for (int x : vertical) {
+                      for (int y = 1; y < ROWS - 1; y++) walls[y][x] = false;
+                  }
+                  int[] horizontal = {7, 13, 19, 23};
+                  for (int y : horizontal) {
+                      for (int x = 1; x < COLS - 1; x++) walls[y][x] = false;
+                  }
+              }
+          
+              private static void carveSpringSquares(boolean[][] walls, Random random) {
+                  int[][] centers = {{6, 7}, {18, 7}, {6, 19}, {18, 19}};
+                  for (int[] c : centers) {
+                      if (random.nextBoolean()) {
+                          for (int x = c[0] - 2; x <= c[0] + 2; x++) {
+                              walls[c[1] - 2][x] = false;
+                              walls[c[1] + 2][x] = false;
+                          }
+                          for (int y = c[1] - 2; y <= c[1] + 2; y++) {
+                              walls[y][c[0] - 2] = false;
+                              walls[y][c[0] + 2] = false;
+                          }
+                      }
+                  }
+              }
+          
+              private static void carveGalaxyCore(boolean[][] walls) {
+                  for (int x = 8; x <= 16; x++) walls[14][x] = false;
+                  for (int y = 10; y <= 18; y++) walls[y][12] = false;
+                  for (int y = 12; y <= 16; y++) {
+                      for (int x = 10; x <= 14; x++) walls[y][x] = false;
+                  }
+              }
+          
+              private static void sealBorderExceptClassicTunnel(boolean[][] walls, boolean classic) {
+                  for (int x = 0; x < COLS; x++) {
+                      walls[0][x] = true;
+                      walls[ROWS - 1][x] = true;
+                  }
+                  for (int y = 0; y < ROWS; y++) {
+                      walls[y][0] = true;
+                      walls[y][COLS - 1] = true;
+                  }
+                  if (classic) {
+                      walls[13][0] = false;
+                      walls[13][COLS - 1] = false;
+                  }
+              }
+          
+              private static void pruneUnreachable(boolean[][] walls, int sx, int sy) {
+                  boolean[][] seen = flood(walls, sx, sy);
+                  for (int y = 1; y < ROWS - 1; y++) {
+                      for (int x = 1; x < COLS - 1; x++) {
+                          if (!walls[y][x] && !seen[y][x]) walls[y][x] = true;
+                      }
+                  }
+              }
+          
+              private static boolean[][] flood(boolean[][] walls, int sx, int sy) {
+                  boolean[][] seen = new boolean[ROWS][COLS];
+                  if (walls[sy][sx]) return seen;
+                  ArrayDeque<int[]> q = new ArrayDeque<>();
+                  q.add(new int[]{sx, sy});
+                  seen[sy][sx] = true;
+                  int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+                  while (!q.isEmpty()) {
+                      int[] p = q.removeFirst();
+                      for (int[] d : dirs) {
+                          int nx = p[0] + d[0];
+                          int ny = p[1] + d[1];
+                          if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS || seen[ny][nx] || walls[ny][nx]) continue;
+                          seen[ny][nx] = true;
+                          q.addLast(new int[]{nx, ny});
+                      }
+                  }
+                  return seen;
+              }
+          
+              private static boolean allFloorsConnected(boolean[][] walls, int sx, int sy) {
+                  boolean[][] seen = flood(walls, sx, sy);
+                  for (int y = 0; y < ROWS; y++) {
+                      for (int x = 0; x < COLS; x++) if (!walls[y][x] && !seen[y][x]) return false;
+                  }
+                  return true;
+              }
+          
+              private static int countFloors(boolean[][] walls) {
+                  int count = 0;
+                  for (boolean[] row : walls) for (boolean wall : row) if (!wall) count++;
+                  return count;
+              }
+          
+              static int maxOceanEscapeDistance(boolean[][] walls) {
+                  int safeLastRow = (int) Math.floor((ROWS - 1) * 0.40f);
+                  int[][] dist = new int[ROWS][COLS];
+                  for (int[] row : dist) Arrays.fill(row, -1);
+                  ArrayDeque<int[]> q = new ArrayDeque<>();
+                  for (int y = 1; y <= safeLastRow; y++) {
+                      for (int x = 1; x < COLS - 1; x++) {
+                          if (!walls[y][x]) {
+                              dist[y][x] = 0;
+                              q.addLast(new int[]{x, y});
+                          }
+                      }
+                  }
+                  int max = 0;
+                  int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+                  while (!q.isEmpty()) {
+                      int[] p = q.removeFirst();
+                      max = Math.max(max, dist[p[1]][p[0]]);
+                      for (int[] d : dirs) {
+                          int nx = p[0] + d[0];
+                          int ny = p[1] + d[1];
+                          if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS || walls[ny][nx] || dist[ny][nx] >= 0) continue;
+                          dist[ny][nx] = dist[p[1]][p[0]] + 1;
+                          q.addLast(new int[]{nx, ny});
+                      }
+                  }
+                  return max;
+              }
+          
+              private static int[][] chooseEnemySpawns(boolean[][] walls, int theme, Random random) {
+                  int[][] desired;
+                  if (theme == 0) {
+                      desired = new int[][]{{10, 11}, {14, 11}, {10, 17}, {14, 17}};
+                  } else {
+                      desired = new int[][]{{11, 14}, {13, 14}, {12, 13}, {12, 15}};
+                  }
+                  int[][] out = new int[4][2];
+                  List<int[]> used = new ArrayList<>();
+                  for (int i = 0; i < out.length; i++) {
+                      int[] p = nearestFloor(walls, desired[i][0], desired[i][1], used);
+                      out[i] = p;
+                      used.add(p);
+                  }
+                  return out;
+              }
+          
+              static int[] nearestFloor(boolean[][] walls, int tx, int ty, List<int[]> forbidden) {
+                  int bestX = 1, bestY = 1, best = Integer.MAX_VALUE;
+                  for (int y = 1; y < ROWS - 1; y++) {
+                      for (int x = 1; x < COLS - 1; x++) {
+                          if (walls[y][x]) continue;
+                          boolean blocked = false;
+                          if (forbidden != null) {
+                              for (int[] p : forbidden) {
+                                  if (Math.abs(p[0] - x) + Math.abs(p[1] - y) < 2) {
+                                      blocked = true;
+                                      break;
+                                  }
+                              }
+                          }
+                          if (blocked) continue;
+                          int d = Math.abs(tx - x) + Math.abs(ty - y);
+                          if (d < best) {
+                              best = d;
+                              bestX = x;
+                              bestY = y;
+                          }
+                      }
+                  }
+                  return new int[]{bestX, bestY};
+              }
+          
+              private static long signature(boolean[][] walls) {
+                  long h = 0xcbf29ce484222325L;
+                  for (int y = 0; y < ROWS; y++) {
+                      for (int x = 0; x < COLS; x++) {
+                          h ^= walls[y][x] ? 1L : 0L;
+                          h *= 0x100000001b3L;
+                      }
+                  }
+                  return h;
+              }
+          
+              private static void carveFallback(boolean[][] walls) {
+                  for (int y = 1; y < ROWS - 1; y++) {
+                      for (int x = 1; x < COLS - 1; x++) {
+                          if ((x & 1) == 1 || (y & 1) == 1) walls[y][x] = false;
+                      }
+                  }
+                  carveSpawnSafety(walls);
+              }
+          }
+          MAZE_GENERATOR
+
+          cat > generated-game/app/src/main/java/com/qi/xingdoumaze/GameView.java <<'GAME_VIEW'
+          package com.qi.xingdoumaze;
+          
+          import android.content.Context;
+          import android.content.SharedPreferences;
+          import android.graphics.Bitmap;
+          import android.graphics.Canvas;
+          import android.graphics.Color;
+          import android.graphics.LinearGradient;
+          import android.graphics.Paint;
+          import android.graphics.Path;
+          import android.graphics.RadialGradient;
+          import android.graphics.RectF;
+          import android.graphics.Shader;
+          import android.graphics.Typeface;
+          import android.media.AudioManager;
+          import android.media.ToneGenerator;
+          import android.os.Build;
+          import android.os.VibrationEffect;
+          import android.os.Vibrator;
+          import android.view.HapticFeedbackConstants;
+          import android.view.MotionEvent;
+          import android.view.View;
+          
+          import java.util.ArrayDeque;
+          import java.util.ArrayList;
+          import java.util.Arrays;
+          import java.util.Iterator;
+          import java.util.List;
+          import java.util.Locale;
+          import java.util.Random;
+          
+          /**
+           * 星豆迷宫：全部图形由 Canvas 实时绘制，不依赖外部图片或游戏框架。
+           */
+          public final class GameView extends View {
+              private static final int COLS = MazeGenerator.COLS;
+              private static final int ROWS = MazeGenerator.ROWS;
+              private static final float CONTROL_TOP_RATIO = 0.70f;
+              private static final float PLAYER_SPEED = 5.15f;
+              private static final float BASE_ENEMY_SPEED = 3.78f;
+              private static final float COMPANION_SPEED = 4.72f;
+              private static final float EPS = 0.0001f;
+          
+              private enum Screen { HOME, MAP_SELECT, GUIDE, PLAYING, PAUSED, GAME_OVER, WIN }
+          
+              private enum Theme {
+                  CLOWN("小丑乐园", "巨型小丑 · 礼盒 · 隐形狂欢", 0xFF6D1B7B, 0xFFFFC857),
+                  CLASSIC("经典迷宫", "经典追逐 · 能量豆 · 限时爱心", 0xFF06133C, 0xFF287BFF),
+                  OCEAN("海洋世界", "鱼群追捕 · 三段潮汐 · 呼吸挑战", 0xFF04395E, 0xFF33D6E8),
+                  SPRING("新春盛景", "爆竹豆 · 可破坏墙壁 · 烟花", 0xFF7B0815, 0xFFFFC54D),
+                  GALAXY("银河系", "黑洞 · 虫洞 · 预判陨石", 0xFF10052E, 0xFF9B6CFF);
+          
+                  final String title;
+                  final String subtitle;
+                  final int dark;
+                  final int accent;
+          
+                  Theme(String title, String subtitle, int dark, int accent) {
+                      this.title = title;
+                      this.subtitle = subtitle;
+                      this.dark = dark;
+                      this.accent = accent;
+                  }
+              }
+          
+              private enum Dir {
+                  NONE(0, 0), UP(0, -1), DOWN(0, 1), LEFT(-1, 0), RIGHT(1, 0);
+                  final int dx;
+                  final int dy;
+          
+                  Dir(int dx, int dy) {
+                      this.dx = dx;
+                      this.dy = dy;
+                  }
+          
+                  Dir opposite() {
+                      switch (this) {
+                          case UP: return DOWN;
+                          case DOWN: return UP;
+                          case LEFT: return RIGHT;
+                          case RIGHT: return LEFT;
+                          default: return NONE;
+                      }
+                  }
+              }
+          
+              private enum ItemType { GIFT, HEART, BIG_CRACKER, WORMHOLE }
+          
+              private static final class Actor {
+                  int cellX;
+                  int cellY;
+                  int spawnX;
+                  int spawnY;
+                  int kind;
+                  Dir dir = Dir.NONE;
+                  Dir wanted = Dir.NONE;
+                  float progress;
+                  float stunnedUntil;
+                  boolean alive = true;
+                  boolean revealed;
+                  boolean forced;
+                  float forcedX;
+                  float forcedY;
+                  float pullStartX;
+                  float pullStartY;
+          
+                  Actor(int x, int y, int kind) {
+                      cellX = spawnX = x;
+                      cellY = spawnY = y;
+                      this.kind = kind;
+                  }
+          
+                  float x() { return forced ? forcedX : cellX + dir.dx * progress; }
+                  float y() { return forced ? forcedY : cellY + dir.dy * progress; }
+          
+                  void place(int x, int y) {
+                      cellX = x;
+                      cellY = y;
+                      progress = 0f;
+                      dir = Dir.NONE;
+                      wanted = Dir.NONE;
+                      forced = false;
+                  }
+              }
+          
+              private static final class Item {
+                  final ItemType type;
+                  final int x;
+                  final int y;
+                  final float expires;
+          
+                  Item(ItemType type, int x, int y, float expires) {
+                      this.type = type;
+                      this.x = x;
+                      this.y = y;
+                      this.expires = expires;
+                  }
+              }
+          
+              private static final class Bomb {
+                  final int x;
+                  final int y;
+                  final float explodeAt;
+                  final float radius;
+                  final boolean big;
+                  boolean exploded;
+                  float vanishAt;
+          
+                  Bomb(int x, int y, float explodeAt, float radius, boolean big) {
+                      this.x = x;
+                      this.y = y;
+                      this.explodeAt = explodeAt;
+                      this.radius = radius;
+                      this.big = big;
+                  }
+              }
+          
+              private static final class Meteor {
+                  int x;
+                  int y;
+                  float impactAt;
+                  float vanishAt;
+                  boolean active;
+                  boolean impacted;
+              }
+          
+              private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+              private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+              private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+              private final Path path = new Path();
+              private final RectF tmpRect = new RectF();
+              private final RectF startButton = new RectF();
+              private final RectF guideButton = new RectF();
+              private final RectF backButton = new RectF();
+              private final RectF pauseButton = new RectF();
+              private final RectF toggleButton = new RectF();
+              private final RectF bombButton = new RectF();
+              private final RectF resumeButton = new RectF();
+              private final RectF exitButton = new RectF();
+              private final RectF[] mapCards = new RectF[Theme.values().length];
+              private final Random random = new Random();
+              private final SharedPreferences prefs;
+              private final ToneGenerator tone;
+              private final int[][] bfsDistance = new int[ROWS][COLS];
+              private final int[] queueX = new int[COLS * ROWS];
+              private final int[] queueY = new int[COLS * ROWS];
+              private final int[][] pelletDistance = new int[ROWS][COLS];
+              private final float[] starX = new float[56];
+              private final float[] starY = new float[56];
+              private final float[] starSize = new float[56];
+          
+              private Screen screen = Screen.HOME;
+              private Screen screenBeforeGuide = Screen.HOME;
+              private Theme theme = Theme.CLOWN;
+              private boolean systemPaused;
+              private boolean dpadMode;
+              private boolean[][] walls = new boolean[ROWS][COLS];
+              private boolean[][] pellets = new boolean[ROWS][COLS];
+              private boolean[][] powerPellets = new boolean[ROWS][COLS];
+              private float[][] brokenUntil = new float[ROWS][COLS];
+              private Actor player;
+              private Actor companion;
+              private final Actor[] enemies = new Actor[4];
+              private final List<Item> items = new ArrayList<>();
+              private final List<Bomb> activeBombs = new ArrayList<>();
+              private final Meteor meteor = new Meteor();
+          
+              private int viewW;
+              private int viewH;
+              private float controlTop;
+              private float mazeTop;
+              private float mazeBottom;
+              private float cell;
+              private float originX;
+              private float originY;
+              private float joystickCx;
+              private float joystickCy;
+              private float joystickRadius;
+              private float joystickKnobX;
+              private float joystickKnobY;
+              private int joystickPointer = -1;
+              private Bitmap wallCache;
+              private boolean wallCacheDirty = true;
+              private Shader backgroundShader;
+          
+              private long lastFrameNanos;
+              private float gameTime;
+              private int score;
+              private int bestScore;
+              private int lives;
+              private int bombCount;
+              private int pelletsRemaining;
+              private int pelletsEaten;
+              private int enemyEatChain;
+              private float safeUntil;
+              private float invincibleUntil;
+              private float shieldUntil;
+              private float speedUntil;
+              private float powerUntil;
+              private float heartUntil;
+              private float reviveAt = -1f;
+              private boolean heartRevive;
+              private boolean companionOnly;
+              private String banner = "";
+              private float bannerUntil;
+          
+              // 小丑乐园事件
+              private float nextGiftAt;
+              private float nextClownBuffAt;
+              private float clownWaveStart = -1f;
+              private float enemyBoostStart;
+              private float enemyBoostUntil;
+              private float enemyInvisibleStart;
+              private float enemyInvisibleUntil;
+              private boolean wasInClownRange;
+              private float clownAttackStart = -10f;
+              private Dir clownAttackDir = Dir.NONE;
+              private boolean clownAttackHit;
+          
+              // 海洋事件
+              private int tideStage;
+              private boolean tideRising = true;
+              private float tideLevel;
+              private float tideTarget;
+              private float nextTideAt;
+              private boolean tideWarned;
+              private float breath = 5f;
+          
+              // 其他主题事件
+              private float nextHeartAt;
+              private float nextBigCrackerAt;
+              private float nextBlackHoleAt;
+              private float nextWormholeAt;
+              private float nextMeteorAt;
+              private boolean blackHoleRunning;
+              private boolean blackHolePullStarted;
+              private int blackHoleMode; // 0=玩家，1=全部敌人
+              private float blackHoleStart;
+              private float blackHoleActiveAt;
+              private float blackHoleEnd;
+              private float globalScatterUntil;
+          
+              public GameView(Context context) {
+                  super(context);
+                  setFocusable(true);
+                  setKeepScreenOn(true);
+                  setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                  prefs = context.getSharedPreferences("星豆迷宫记录", Context.MODE_PRIVATE);
+                  dpadMode = prefs.getBoolean("方向键模式", false);
+                  tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 35);
+                  textPaint.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+                  strokePaint.setStyle(Paint.Style.STROKE);
+                  Random stars = new Random(20260712L);
+                  for (int i = 0; i < starX.length; i++) {
+                      starX[i] = stars.nextFloat();
+                      starY[i] = stars.nextFloat();
+                      starSize[i] = 0.5f + stars.nextFloat() * 1.8f;
+                  }
+                  for (int i = 0; i < mapCards.length; i++) mapCards[i] = new RectF();
+              }
+          
+              @Override
+              protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+                  viewW = w;
+                  viewH = h;
+                  controlTop = h * CONTROL_TOP_RATIO;
+                  float hudHeight = h * 0.052f;
+                  float available = controlTop - hudHeight;
+                  cell = Math.min(w * 0.985f / COLS, available * 0.985f / ROWS);
+                  originX = (w - cell * COLS) * 0.5f;
+                  originY = hudHeight + (available - cell * ROWS) * 0.5f;
+                  mazeTop = originY;
+                  mazeBottom = originY + cell * ROWS;
+                  joystickCx = w * 0.27f;
+                  joystickCy = controlTop + (h - controlTop) * 0.57f;
+                  joystickRadius = Math.min(w * 0.185f, (h - controlTop) * 0.34f);
+                  joystickKnobX = joystickCx;
+                  joystickKnobY = joystickCy;
+                  updateUiRects();
+                  rebuildBackgroundShader();
+                  wallCacheDirty = true;
+              }
+          
+              private void updateUiRects() {
+                  float bw = viewW * 0.58f;
+                  float bh = Math.max(52f, viewH * 0.061f);
+                  startButton.set((viewW - bw) / 2f, viewH * 0.60f,
+                          (viewW + bw) / 2f, viewH * 0.60f + bh);
+                  guideButton.set((viewW - bw) / 2f, viewH * 0.69f,
+                          (viewW + bw) / 2f, viewH * 0.69f + bh * 0.88f);
+                  backButton.set(viewW * 0.04f, viewH * 0.035f, viewW * 0.22f, viewH * 0.095f);
+                  pauseButton.set(viewW * 0.89f, viewH * 0.008f, viewW * 0.985f, viewH * 0.052f);
+                  toggleButton.set(viewW * 0.42f, controlTop + (viewH - controlTop) * 0.06f,
+                          viewW * 0.64f, controlTop + (viewH - controlTop) * 0.25f);
+                  float br = Math.min(viewW * 0.14f, (viewH - controlTop) * 0.25f);
+                  bombButton.set(viewW * 0.78f - br, joystickCy - br,
+                          viewW * 0.78f + br, joystickCy + br);
+                  resumeButton.set(viewW * 0.22f, viewH * 0.48f, viewW * 0.78f, viewH * 0.56f);
+                  exitButton.set(viewW * 0.22f, viewH * 0.60f, viewW * 0.78f, viewH * 0.68f);
+          
+                  float cardW = viewW * 0.43f;
+                  float cardH = viewH * 0.19f;
+                  float left = viewW * 0.05f;
+                  float right = viewW - left - cardW;
+                  float y1 = viewH * 0.16f;
+                  float gapY = viewH * 0.225f;
+                  mapCards[0].set(left, y1, left + cardW, y1 + cardH);
+                  mapCards[1].set(right, y1, right + cardW, y1 + cardH);
+                  mapCards[2].set(left, y1 + gapY, left + cardW, y1 + gapY + cardH);
+                  mapCards[3].set(right, y1 + gapY, right + cardW, y1 + gapY + cardH);
+                  mapCards[4].set((viewW - cardW) / 2f, y1 + gapY * 2f,
+                          (viewW + cardW) / 2f, y1 + gapY * 2f + cardH);
+              }
+          
+              private void rebuildBackgroundShader() {
+                  int top = theme.dark;
+                  int bottom = mixColor(theme.dark, Color.BLACK, 0.60f);
+                  backgroundShader = new LinearGradient(0, 0, 0, Math.max(1, viewH),
+                          top, bottom, Shader.TileMode.CLAMP);
+              }
+          
+              private void startGame(Theme selected) {
+                  theme = selected;
+                  rebuildBackgroundShader();
+                  long counter = prefs.getLong("迷宫序号", 0L) + 1L;
+                  long seed = System.nanoTime() ^ (counter * 0x9E3779B97F4A7C15L) ^ selected.ordinal();
+                  long previous = prefs.getLong("上次迷宫_" + selected.ordinal(), Long.MIN_VALUE);
+                  MazeGenerator.Result result = MazeGenerator.generate(selected.ordinal(), seed);
+                  for (int retry = 0; retry < 8 && result.signature == previous; retry++) {
+                      result = MazeGenerator.generate(selected.ordinal(), seed + retry * 104729L);
+                  }
+                  prefs.edit().putLong("迷宫序号", counter)
+                          .putLong("上次迷宫_" + selected.ordinal(), result.signature).apply();
+          
+                  walls = result.walls;
+                  pellets = new boolean[ROWS][COLS];
+                  powerPellets = new boolean[ROWS][COLS];
+                  brokenUntil = new float[ROWS][COLS];
+                  for (int y = 0; y < ROWS; y++) {
+                      for (int x = 0; x < COLS; x++) pellets[y][x] = !walls[y][x];
+                  }
+          
+                  player = new Actor(result.playerX, result.playerY, -1);
+                  player.wanted = Dir.RIGHT;
+                  for (int i = 0; i < enemies.length; i++) {
+                      enemies[i] = new Actor(result.enemySpawns[i][0], result.enemySpawns[i][1], i);
+                      enemies[i].wanted = (i % 2 == 0) ? Dir.LEFT : Dir.RIGHT;
+                  }
+                  companion = new Actor(result.companionX, result.companionY, 10);
+                  companion.alive = false;
+                  clearPelletsAround(player.cellX, player.cellY, 2);
+                  for (Actor enemy : enemies) clearPelletsAround(enemy.cellX, enemy.cellY, 1);
+                  placePowerPellets();
+                  recountPellets();
+          
+                  items.clear();
+                  activeBombs.clear();
+                  meteor.active = false;
+                  gameTime = 0f;
+                  score = 0;
+                  bestScore = prefs.getInt("最高分_" + theme.ordinal(), 0);
+                  lives = 3;
+                  bombCount = 3;
+                  pelletsEaten = 0;
+                  enemyEatChain = 0;
+                  safeUntil = 4f;
+                  invincibleUntil = shieldUntil = speedUntil = powerUntil = heartUntil = 0f;
+                  reviveAt = -1f;
+                  heartRevive = false;
+                  companionOnly = false;
+                  nextGiftAt = 20f + random.nextFloat() * 20f;
+                  nextClownBuffAt = 20f + random.nextFloat() * 20f;
+                  clownWaveStart = -1f;
+                  enemyBoostStart = enemyBoostUntil = 0f;
+                  enemyInvisibleStart = enemyInvisibleUntil = 0f;
+                  wasInClownRange = false;
+                  clownAttackStart = -10f;
+                  tideStage = 0;
+                  tideRising = true;
+                  tideLevel = tideTarget = 0f;
+                  nextTideAt = 18f;
+                  tideWarned = false;
+                  breath = 5f;
+                  nextHeartAt = 24f + random.nextFloat() * 16f;
+                  nextBigCrackerAt = 18f + random.nextFloat() * 15f;
+                  nextBlackHoleAt = 10f + random.nextFloat() * 10f;
+                  nextWormholeAt = 18f + random.nextFloat() * 20f;
+                  nextMeteorAt = 12f + random.nextFloat() * 12f;
+                  blackHoleRunning = false;
+                  globalScatterUntil = 0f;
+                  banner = theme.title + " · 新迷宫";
+                  bannerUntil = 2.2f;
+                  screen = Screen.PLAYING;
+                  lastFrameNanos = 0L;
+                  wallCacheDirty = true;
+                  playTone(ToneGenerator.TONE_PROP_ACK, 100);
+                  invalidate();
+              }
+          
+              private void clearPelletsAround(int cx, int cy, int radius) {
+                  for (int y = Math.max(0, cy - radius); y <= Math.min(ROWS - 1, cy + radius); y++) {
+                      for (int x = Math.max(0, cx - radius); x <= Math.min(COLS - 1, cx + radius); x++) {
+                          if (Math.abs(x - cx) + Math.abs(y - cy) <= radius) {
+                              pellets[y][x] = false;
+                              powerPellets[y][x] = false;
+                          }
+                      }
+                  }
+              }
+          
+              private void placePowerPellets() {
+                  int[][] desired = {{1, 1}, {COLS - 2, 1}, {1, ROWS - 6}, {COLS - 2, ROWS - 6}};
+                  for (int[] target : desired) {
+                      int[] p = nearestPassable(target[0], target[1]);
+                      if (Math.abs(p[0] - player.cellX) + Math.abs(p[1] - player.cellY) < 4) continue;
+                      pellets[p[1]][p[0]] = false;
+                      powerPellets[p[1]][p[0]] = true;
+                  }
+              }
+          
+              private void recountPellets() {
+                  pelletsRemaining = 0;
+                  for (int y = 0; y < ROWS; y++) {
+                      for (int x = 0; x < COLS; x++) {
+                          if (pellets[y][x] || powerPellets[y][x]) pelletsRemaining++;
+                      }
+                  }
+              }
+          
+              @Override
+              protected void onDraw(Canvas canvas) {
+                  super.onDraw(canvas);
+                  long now = System.nanoTime();
+                  if (lastFrameNanos == 0L) lastFrameNanos = now;
+                  float dt = Math.min(0.034f, Math.max(0f, (now - lastFrameNanos) / 1_000_000_000f));
+                  lastFrameNanos = now;
+          
+                  if (screen == Screen.PLAYING && !systemPaused) updateGame(dt);
+          
+                  switch (screen) {
+                      case HOME: drawHome(canvas); break;
+                      case MAP_SELECT: drawMapSelect(canvas); break;
+                      case GUIDE: drawGuide(canvas); break;
+                      default: drawGame(canvas); break;
+                  }
+          
+                  if (screen == Screen.PLAYING && !systemPaused) postInvalidateOnAnimation();
+              }
+          
+              private void updateGame(float dt) {
+                  gameTime += dt;
+                  updateBrokenWalls();
+                  updateRevival();
+                  updateThemeEvents(dt);
+                  updateItems();
+                  updateBombs();
+          
+                  if (player != null && player.alive && !player.forced) {
+                      float speed = PLAYER_SPEED * (gameTime < speedUntil ? 1.40f : 1f);
+                      moveActor(player, dt, speed, false);
+                  }
+                  if (companion != null && companion.alive && !companion.forced) {
+                      moveActor(companion, dt, COMPANION_SPEED, true);
+                  }
+          
+                  float progression = 1f + Math.min(0.18f, gameTime / 900f);
+                  float boost = gameTime >= enemyBoostStart && gameTime < enemyBoostUntil ? 1.50f : 1f;
+                  for (Actor enemy : enemies) {
+                      if (enemy != null && enemy.alive && !enemy.forced) {
+                          float personality = 1f + enemy.kind * 0.025f;
+                          moveActor(enemy, dt, BASE_ENEMY_SPEED * progression * boost * personality, true);
+                      }
+                  }
+          
+                  updateGalaxyPull();
+                  checkCollisions();
+                  if (pelletsRemaining <= 0 && screen == Screen.PLAYING) finishGame(true);
+              }
+          
+              private void moveActor(Actor actor, float dt, float speed, boolean ai) {
+                  if (!actor.alive || actor.forced || gameTime < actor.stunnedUntil) return;
+          
+                  if (!ai && actor.progress > EPS && actor.wanted == actor.dir.opposite()) {
+                      int nx = wrapX(actor.cellX + actor.dir.dx);
+                      int ny = actor.cellY + actor.dir.dy;
+                      actor.cellX = nx;
+                      actor.cellY = ny;
+                      actor.progress = 1f - actor.progress;
+                      actor.dir = actor.wanted;
+                  }
+          
+                  float remaining = speed * dt;
+                  int guard = 0;
+                  while (remaining > EPS && guard++ < 5) {
+                      if (actor.progress <= EPS) {
+                          actor.progress = 0f;
+                          if (ai) actor.wanted = actor.kind == 10
+                                  ? chooseCompanionDirection(actor) : chooseEnemyDirection(actor);
+                          if (actor.wanted != Dir.NONE && canMove(actor.cellX, actor.cellY, actor.wanted)) {
+                              actor.dir = actor.wanted;
+                          }
+                          if (actor.dir == Dir.NONE || !canMove(actor.cellX, actor.cellY, actor.dir)) {
+                              if (ai) {
+                                  actor.dir = chooseAnyDirection(actor, actor.dir.opposite());
+                              } else {
+                                  actor.dir = Dir.NONE;
+                              }
+                              if (actor.dir == Dir.NONE) return;
+                          }
+                      }
+          
+                      float step = Math.min(remaining, 1f - actor.progress);
+                      actor.progress += step;
+                      remaining -= step;
+                      if (actor.progress >= 1f - EPS) {
+                          actor.cellX = wrapX(actor.cellX + actor.dir.dx);
+                          actor.cellY += actor.dir.dy;
+                          actor.progress = 0f;
+                          onActorArrived(actor);
+                      }
+                  }
+              }
+          
+              private void onActorArrived(Actor actor) {
+                  if (actor.kind == -1 || actor.kind == 10) collectPellet(actor);
+                  if (actor.kind == -1) collectItemAt(actor.cellX, actor.cellY);
+              }
+          
+              private void collectPellet(Actor actor) {
+                  int x = actor.cellX;
+                  int y = actor.cellY;
+                  if (pellets[y][x]) {
+                      pellets[y][x] = false;
+                      pelletsRemaining--;
+                      pelletsEaten++;
+                      score += actor.kind == 10 ? 8 : 10;
+                      if ((pelletsEaten & 3) == 0) playTone(ToneGenerator.TONE_PROP_BEEP, 22);
+                      if (pelletsEaten > 0 && pelletsEaten % 80 == 0 && bombCount < 5) {
+                          bombCount++;
+                          showMessage("收集奖励：炸弹 +1", 1.6f);
+                      }
+                  } else if (powerPellets[y][x]) {
+                      powerPellets[y][x] = false;
+                      pelletsRemaining--;
+                      pelletsEaten++;
+                      score += 50;
+                      powerUntil = gameTime + 7f;
+                      enemyEatChain = 0;
+                      showMessage("能量觉醒：敌人暂时可被反击", 1.8f);
+                      playTone(ToneGenerator.TONE_PROP_ACK, 130);
+                      vibrate(35);
+                  }
+              }
+          
+              private boolean canMove(int x, int y, Dir dir) {
+                  if (dir == Dir.NONE) return false;
+                  int nx = x + dir.dx;
+                  int ny = y + dir.dy;
+                  if (nx < 0 || nx >= COLS) {
+                      if (theme == Theme.CLASSIC && y == 13) nx = wrapX(nx);
+                      else return false;
+                  }
+                  return ny >= 0 && ny < ROWS && !isWall(nx, ny);
+              }
+          
+              private boolean isWall(int x, int y) {
+                  return walls[y][x] && !(brokenUntil[y][x] > gameTime);
+              }
+          
+              private int wrapX(int x) {
+                  if (x < 0) return COLS - 1;
+                  if (x >= COLS) return 0;
+                  return x;
+              }
+          
+              private Dir chooseAnyDirection(Actor actor, Dir avoid) {
+                  Dir[] dirs = {Dir.UP, Dir.DOWN, Dir.LEFT, Dir.RIGHT};
+                  List<Dir> choices = new ArrayList<>(4);
+                  for (Dir d : dirs) if (canMove(actor.cellX, actor.cellY, d) && d != avoid) choices.add(d);
+                  if (choices.isEmpty()) {
+                      for (Dir d : dirs) if (canMove(actor.cellX, actor.cellY, d)) choices.add(d);
+                  }
+                  return choices.isEmpty() ? Dir.NONE : choices.get(random.nextInt(choices.size()));
+              }
+          
+              /**
+               * 四种敌人分别使用追踪、伏击、夹击与距离切换策略。
+               * 路径代价通过实时 BFS 计算，破墙和随机迷宫变化都会立刻反映到决策中。
+               */
+              private Dir chooseEnemyDirection(Actor enemy) {
+                  Actor targetActor = player != null && player.alive ? player
+                          : (companion != null && companion.alive ? companion : null);
+                  if (targetActor == null) return chooseAnyDirection(enemy, enemy.dir.opposite());
+          
+                  List<Dir> choices = availableDirections(enemy.cellX, enemy.cellY, enemy.dir.opposite());
+                  if (choices.isEmpty()) choices = availableDirections(enemy.cellX, enemy.cellY, Dir.NONE);
+                  if (choices.isEmpty()) return Dir.NONE;
+          
+                  boolean frightened = gameTime < powerUntil;
+                  if (frightened) {
+                      int tx = Math.round(targetActor.x());
+                      int ty = Math.round(targetActor.y());
+                      buildDistanceMap(tx, ty, bfsDistance);
+                      Dir best = choices.get(0);
+                      float bestValue = -Float.MAX_VALUE;
+                      for (Dir d : choices) {
+                          int nx = wrapX(enemy.cellX + d.dx);
+                          int ny = enemy.cellY + d.dy;
+                          int dist = safeDistanceValue(bfsDistance[ny][nx]);
+                          float value = dist + random.nextFloat() * 2.5f;
+                          if (value > bestValue) {
+                              bestValue = value;
+                              best = d;
+                          }
+                      }
+                      return best;
+                  }
+          
+                  boolean scatter = gameTime < globalScatterUntil || ((int) (gameTime / 6f) % 4 == 3);
+                  int targetX;
+                  int targetY;
+                  if (scatter) {
+                      int[][] corners = {{COLS - 2, 1}, {1, 1}, {COLS - 2, ROWS - 2}, {1, ROWS - 2}};
+                      targetX = corners[enemy.kind][0];
+                      targetY = corners[enemy.kind][1];
+                  } else if (enemy.kind == 0) {
+                      // 红色：直接追踪玩家当前位置。
+                      targetX = Math.round(targetActor.x());
+                      targetY = Math.round(targetActor.y());
+                  } else if (enemy.kind == 1) {
+                      // 粉色：预判玩家前方四格，形成伏击。
+                      int[] ahead = projectAhead(targetActor, 4);
+                      targetX = ahead[0];
+                      targetY = ahead[1];
+                  } else if (enemy.kind == 2) {
+                      // 青色：参考红色敌人与玩家前方位置，尝试从另一侧夹击。
+                      int[] ahead = projectAhead(targetActor, 2);
+                      Actor red = enemies[0];
+                      targetX = clamp(Math.round(ahead[0] * 2f - red.x()), 1, COLS - 2);
+                      targetY = clamp(Math.round(ahead[1] * 2f - red.y()), 1, ROWS - 2);
+                  } else {
+                      // 橙色：远时追击，靠得太近则撤向自己的角落，避免四只敌人完全重合。
+                      float distance = actorDistance(enemy, targetActor);
+                      if (distance > 8f) {
+                          targetX = Math.round(targetActor.x());
+                          targetY = Math.round(targetActor.y());
+                      } else {
+                          targetX = 1;
+                          targetY = ROWS - 2;
+                      }
+                  }
+                  int[] passableTarget = nearestPassable(targetX, targetY);
+                  buildDistanceMap(passableTarget[0], passableTarget[1], bfsDistance);
+          
+                  Dir best = choices.get(0);
+                  float bestValue = Float.MAX_VALUE;
+                  for (Dir d : choices) {
+                      int nx = wrapX(enemy.cellX + d.dx);
+                      int ny = enemy.cellY + d.dy;
+                      float value = safeDistanceValue(bfsDistance[ny][nx]);
+                      // 少量个体噪声让路线自然，但不会盖过寻路策略。
+                      value += random.nextFloat() * (enemy.kind == 3 ? 1.0f : 0.22f);
+                      if (value < bestValue) {
+                          bestValue = value;
+                          best = d;
+                      }
+                  }
+                  if (choices.size() > 1 && random.nextFloat() < 0.025f + enemy.kind * 0.008f) {
+                      best = choices.get(random.nextInt(choices.size()));
+                  }
+                  return best;
+              }
+          
+              /**
+               * 小跟班同时考虑豆子距离、敌人预测位置、死胡同与当前主题危险。
+               * 它会犯少量带权随机错误，因此聪明但并非不会被抓。
+               */
+              private Dir chooseCompanionDirection(Actor actor) {
+                  List<Dir> choices = availableDirections(actor.cellX, actor.cellY, actor.dir.opposite());
+                  if (choices.isEmpty()) choices = availableDirections(actor.cellX, actor.cellY, Dir.NONE);
+                  if (choices.isEmpty()) return Dir.NONE;
+                  buildPelletDistanceMap();
+          
+                  float currentDanger = nearestEnemyDistance(actor.cellX, actor.cellY);
+                  Dir best = choices.get(0);
+                  float bestValue = -Float.MAX_VALUE;
+                  for (Dir d : choices) {
+                      int nx = wrapX(actor.cellX + d.dx);
+                      int ny = actor.cellY + d.dy;
+                      float danger = nearestEnemyDistance(nx, ny);
+                      int foodDist = pelletDistance[ny][nx] < 0 ? 80 : pelletDistance[ny][nx];
+                      int exits = countExits(nx, ny);
+                      float value = -foodDist * (currentDanger > 7f ? 2.8f : 1.1f) + danger * 3.4f;
+                      if (pellets[ny][nx]) value += 18f;
+                      if (powerPellets[ny][nx]) value += currentDanger < 8f ? 42f : 14f;
+                      if (danger < 2.2f) value -= 200f;
+                      else if (danger < 4f) value -= (4f - danger) * 34f;
+                      if (exits <= 1 && danger < 8f) value -= 55f;
+                      value -= companionHazardPenalty(nx, ny);
+                      value += random.nextFloat() * 1.8f;
+                      if (value > bestValue) {
+                          bestValue = value;
+                          best = d;
+                      }
+                  }
+                  // 约 2% 的非最优选择保留被捕可能，也让动作不显得机械。
+                  if (choices.size() > 1 && random.nextFloat() < 0.02f) {
+                      return choices.get(random.nextInt(choices.size()));
+                  }
+                  return best;
+              }
+          
+              private float companionHazardPenalty(int x, int y) {
+                  float penalty = 0f;
+                  if (theme == Theme.CLOWN && inClownAttackZone(x, y)) penalty += 24f;
+                  if (theme == Theme.OCEAN && tideLevel > 0.08f) {
+                      float waterRow = ROWS * (1f - tideLevel);
+                      if (y > waterRow) penalty += 12f + (y - waterRow) * 1.5f;
+                  }
+                  for (Bomb b : activeBombs) {
+                      if (b.big && !b.exploded && b.explodeAt - gameTime < 3.2f
+                              && distance(x, y, b.x, b.y) < b.radius + 1.2f) penalty += 180f;
+                  }
+                  if (meteor.active && !meteor.impacted && meteor.impactAt - gameTime < 1.7f
+                          && distance(x, y, meteor.x, meteor.y) < 2.3f) penalty += 80f;
+                  return penalty;
+              }
+          
+              private List<Dir> availableDirections(int x, int y, Dir avoid) {
+                  Dir[] dirs = {Dir.UP, Dir.DOWN, Dir.LEFT, Dir.RIGHT};
+                  List<Dir> out = new ArrayList<>(4);
+                  for (Dir d : dirs) {
+                      if (d != avoid && canMove(x, y, d)) out.add(d);
+                  }
+                  return out;
+              }
+          
+              private int[] projectAhead(Actor actor, int steps) {
+                  int x = Math.round(actor.x());
+                  int y = Math.round(actor.y());
+                  Dir dir = actor.dir == Dir.NONE ? actor.wanted : actor.dir;
+                  for (int i = 0; i < steps && dir != Dir.NONE; i++) {
+                      if (!canMove(x, y, dir)) break;
+                      x = wrapX(x + dir.dx);
+                      y += dir.dy;
+                  }
+                  return new int[]{x, y};
+              }
+          
+              private void buildDistanceMap(int tx, int ty, int[][] output) {
+                  for (int[] row : output) Arrays.fill(row, -1);
+                  int[] target = nearestPassable(tx, ty);
+                  int head = 0;
+                  int tail = 0;
+                  queueX[tail] = target[0];
+                  queueY[tail++] = target[1];
+                  output[target[1]][target[0]] = 0;
+                  Dir[] dirs = {Dir.UP, Dir.DOWN, Dir.LEFT, Dir.RIGHT};
+                  while (head < tail) {
+                      int x = queueX[head];
+                      int y = queueY[head++];
+                      int nextDist = output[y][x] + 1;
+                      for (Dir d : dirs) {
+                          int nx = x + d.dx;
+                          int ny = y + d.dy;
+                          if (nx < 0 || nx >= COLS) {
+                              if (theme == Theme.CLASSIC && y == 13) nx = wrapX(nx);
+                              else continue;
+                          }
+                          if (ny < 0 || ny >= ROWS || isWall(nx, ny) || output[ny][nx] >= 0) continue;
+                          output[ny][nx] = nextDist;
+                          queueX[tail] = nx;
+                          queueY[tail++] = ny;
+                      }
+                  }
+              }
+          
+              private void buildPelletDistanceMap() {
+                  for (int[] row : pelletDistance) Arrays.fill(row, -1);
+                  int head = 0;
+                  int tail = 0;
+                  for (int y = 0; y < ROWS; y++) {
+                      for (int x = 0; x < COLS; x++) {
+                          if (pellets[y][x] || powerPellets[y][x]) {
+                              pelletDistance[y][x] = 0;
+                              queueX[tail] = x;
+                              queueY[tail++] = y;
+                          }
+                      }
+                  }
+                  Dir[] dirs = {Dir.UP, Dir.DOWN, Dir.LEFT, Dir.RIGHT};
+                  while (head < tail) {
+                      int x = queueX[head];
+                      int y = queueY[head++];
+                      int nd = pelletDistance[y][x] + 1;
+                      for (Dir d : dirs) {
+                          int nx = x + d.dx;
+                          int ny = y + d.dy;
+                          if (nx < 0 || nx >= COLS) {
+                              if (theme == Theme.CLASSIC && y == 13) nx = wrapX(nx);
+                              else continue;
+                          }
+                          if (ny < 0 || ny >= ROWS || isWall(nx, ny) || pelletDistance[ny][nx] >= 0) continue;
+                          pelletDistance[ny][nx] = nd;
+                          queueX[tail] = nx;
+                          queueY[tail++] = ny;
+                      }
+                  }
+              }
+          
+              private int[] nearestPassable(int tx, int ty) {
+                  tx = clamp(tx, 0, COLS - 1);
+                  ty = clamp(ty, 0, ROWS - 1);
+                  if (!isWall(tx, ty)) return new int[]{tx, ty};
+                  int bestX = player == null ? 1 : player.spawnX;
+                  int bestY = player == null ? ROWS - 2 : player.spawnY;
+                  int best = Integer.MAX_VALUE;
+                  for (int y = 0; y < ROWS; y++) {
+                      for (int x = 0; x < COLS; x++) {
+                          if (isWall(x, y)) continue;
+                          int d = Math.abs(tx - x) + Math.abs(ty - y);
+                          if (d < best) {
+                              best = d;
+                              bestX = x;
+                              bestY = y;
+                          }
+                      }
+                  }
+                  return new int[]{bestX, bestY};
+              }
+          
+              private int safeDistanceValue(int d) { return d < 0 ? 9999 : d; }
+          
+              private int countExits(int x, int y) {
+                  int count = 0;
+                  for (Dir d : new Dir[]{Dir.UP, Dir.DOWN, Dir.LEFT, Dir.RIGHT}) {
+                      if (canMove(x, y, d)) count++;
+                  }
+                  return count;
+              }
+          
+              private float nearestEnemyDistance(int x, int y) {
+                  float best = 1000f;
+                  for (Actor enemy : enemies) {
+                      if (enemy == null || !enemy.alive || gameTime < enemy.stunnedUntil) continue;
+                      float predictedX = enemy.x() + enemy.dir.dx * 1.2f;
+                      float predictedY = enemy.y() + enemy.dir.dy * 1.2f;
+                      best = Math.min(best, distance(x, y, predictedX, predictedY));
+                  }
+                  return best;
+              }
+          
+              private void updateThemeEvents(float dt) {
+                  switch (theme) {
+                      case CLOWN: updateClownEvents(); break;
+                      case CLASSIC: updateClassicEvents(); break;
+                      case OCEAN: updateOceanEvents(dt); break;
+                      case SPRING: updateSpringEvents(); break;
+                      case GALAXY: updateGalaxyEvents(); break;
+                  }
+              }
+          
+              private void updateClownEvents() {
+                  if (gameTime >= nextGiftAt) {
+                      nextGiftAt = gameTime + 20f + random.nextFloat() * 20f;
+                      if (random.nextFloat() < 0.58f && !hasItem(ItemType.GIFT)) {
+                          spawnSafeItem(ItemType.GIFT, 11f, 6);
+                      }
+                  }
+                  if (gameTime >= nextClownBuffAt) {
+                      nextClownBuffAt = gameTime + 20f + random.nextFloat() * 20f;
+                      // 敌人过近时延后，避免隐身瞬间形成无预警必死碰撞。
+                      Actor target = player != null && player.alive ? player : companion;
+                      float nearest = target == null ? 99f : nearestEnemyDistance(Math.round(target.x()), Math.round(target.y()));
+                      if (random.nextFloat() < 0.50f && nearest > 4.2f) {
+                          clownWaveStart = gameTime;
+                          enemyBoostStart = gameTime + 1.15f;
+                          enemyBoostUntil = enemyBoostStart + 5f;
+                          enemyInvisibleStart = gameTime + 1.15f;
+                          enemyInvisibleUntil = enemyInvisibleStart + 4f;
+                          for (Actor e : enemies) e.revealed = false;
+                          showMessage("小丑挥手：敌人加速并即将隐形！", 2.1f);
+                          playTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 180);
+                      }
+                  }
+          
+                  if (player != null && player.alive) {
+                      boolean inRange = inClownAttackZone(player.x(), player.y());
+                      if (inRange && !wasInClownRange && gameTime > clownAttackStart + 2f
+                              && random.nextFloat() < 0.15f) {
+                          startClownAttack(player.x(), player.y());
+                      }
+                      wasInClownRange = inRange;
+                      float elapsed = gameTime - clownAttackStart;
+                      if (!clownAttackHit && elapsed >= 0.68f && elapsed <= 1.12f
+                              && playerInsideClownStrike(player.x(), player.y())) {
+                          clownAttackHit = true;
+                          damagePlayer("被小丑的手臂击中");
+                      }
+                  }
+              }
+          
+              private boolean inClownAttackZone(float x, float y) {
+                  boolean horizontal = y >= 12.5f && y <= 15.5f && (x >= 8.5f && x <= 10.5f || x >= 13.5f && x <= 15.5f);
+                  boolean vertical = x >= 10.5f && x <= 13.5f && (y >= 10.5f && y <= 12.5f || y >= 15.5f && y <= 17.5f);
+                  return horizontal || vertical;
+              }
+          
+              private void startClownAttack(float px, float py) {
+                  float dx = px - 12f;
+                  float dy = py - 14f;
+                  if (Math.abs(dx) > Math.abs(dy)) clownAttackDir = dx < 0 ? Dir.LEFT : Dir.RIGHT;
+                  else clownAttackDir = dy < 0 ? Dir.UP : Dir.DOWN;
+                  clownAttackStart = gameTime;
+                  clownAttackHit = false;
+                  showMessage("小丑攻击预警——快离开红色范围！", 1.2f);
+                  vibrate(25);
+              }
+          
+              private boolean playerInsideClownStrike(float x, float y) {
+                  switch (clownAttackDir) {
+                      case LEFT: return x >= 8.4f && x <= 10.8f && y >= 12.4f && y <= 15.6f;
+                      case RIGHT: return x >= 13.2f && x <= 15.6f && y >= 12.4f && y <= 15.6f;
+                      case UP: return y >= 10.4f && y <= 12.8f && x >= 10.4f && x <= 13.6f;
+                      case DOWN: return y >= 15.2f && y <= 17.6f && x >= 10.4f && x <= 13.6f;
+                      default: return false;
+                  }
+              }
+          
+              private void updateClassicEvents() {
+                  if (gameTime >= nextHeartAt) {
+                      nextHeartAt = gameTime + 24f + random.nextFloat() * 18f;
+                      if (random.nextFloat() < 0.42f && !hasItem(ItemType.HEART) && gameTime >= heartUntil) {
+                          spawnSafeItem(ItemType.HEART, 10f, 8);
+                      }
+                  }
+              }
+          
+              private void updateOceanEvents(float dt) {
+                  if (!tideWarned && tideRising && gameTime >= nextTideAt - 3f) {
+                      tideWarned = true;
+                      showMessage("涨潮预警：三秒后海水上升", 2.4f);
+                      playTone(ToneGenerator.TONE_PROP_PROMPT, 100);
+                  }
+                  if (gameTime >= nextTideAt) {
+                      tideWarned = false;
+                      if (tideRising) {
+                          tideStage = Math.min(3, tideStage + 1);
+                          tideTarget = tideStage * 0.20f;
+                          if (tideStage == 3) {
+                              tideRising = false;
+                              nextTideAt = gameTime + 14f;
+                          } else {
+                              nextTideAt = gameTime + 18f;
+                          }
+                      } else {
+                          tideStage = Math.max(0, tideStage - 1);
+                          tideTarget = tideStage * 0.20f;
+                          if (tideStage == 0) {
+                              tideRising = true;
+                              nextTideAt = gameTime + 18f;
+                          } else {
+                              nextTideAt = gameTime + 12f;
+                          }
+                      }
+                  }
+                  tideLevel = approach(tideLevel, tideTarget, dt * 0.095f);
+                  if (player != null && player.alive && isUnderwater(player.x(), player.y())) {
+                      breath -= dt;
+                      if (breath <= 0f) {
+                          breath = 5f;
+                          damagePlayer("氧气耗尽");
+                      }
+                  } else {
+                      breath = Math.min(5f, breath + dt * 2.4f);
+                  }
+              }
+          
+              private boolean isUnderwater(float x, float y) {
+                  return tideLevel > 0.015f && y + 0.35f > ROWS * (1f - tideLevel);
+              }
+          
+              private void updateSpringEvents() {
+                  if (gameTime >= nextBigCrackerAt) {
+                      nextBigCrackerAt = gameTime + 20f + random.nextFloat() * 16f;
+                      if (!hasItem(ItemType.BIG_CRACKER) && !hasArmedBigCracker()) {
+                          spawnSafeItem(ItemType.BIG_CRACKER, 8f, 3);
+                      }
+                  }
+              }
+          
+              private void updateGalaxyEvents() {
+                  if (gameTime >= nextBlackHoleAt && !blackHoleRunning) {
+                      nextBlackHoleAt = gameTime + 19f + random.nextFloat() * 17f;
+                      if (random.nextFloat() < 0.55f && !meteor.active && reviveAt < 0f) {
+                          blackHoleRunning = true;
+                          blackHolePullStarted = false;
+                          blackHoleMode = random.nextBoolean() ? 0 : 1;
+                          blackHoleStart = gameTime;
+                          blackHoleActiveAt = gameTime + 1.05f;
+                          blackHoleEnd = gameTime + 3.05f;
+                          showMessage(blackHoleMode == 0 ? "黑洞预警：即将吸引玩家" : "黑洞预警：即将吸引全部敌人", 2f);
+                          playTone(ToneGenerator.TONE_CDMA_NETWORK_BUSY, 180);
+                      }
+                  }
+                  if (gameTime >= nextWormholeAt) {
+                      nextWormholeAt = gameTime + 22f + random.nextFloat() * 20f;
+                      if (random.nextFloat() < 0.30f && !hasItem(ItemType.WORMHOLE)) {
+                          spawnSafeItem(ItemType.WORMHOLE, 7f, 8);
+                      }
+                  }
+                  if (gameTime >= nextMeteorAt) {
+                      nextMeteorAt = gameTime + 13f + random.nextFloat() * 14f;
+                      if (random.nextFloat() < 0.52f && !blackHoleRunning && player != null && player.alive
+                              && countExits(player.cellX, player.cellY) >= 2) {
+                          int[] predicted = projectAhead(player, 2);
+                          int[] target = nearestPassable(predicted[0], predicted[1]);
+                          meteor.x = target[0];
+                          meteor.y = target[1];
+                          meteor.impactAt = gameTime + 1.45f;
+                          meteor.vanishAt = meteor.impactAt + 0.65f;
+                          meteor.active = true;
+                          meteor.impacted = false;
+                          showMessage("陨石锁定预警！", 1.2f);
+                          vibrate(28);
+                      }
+                  }
+                  if (meteor.active && !meteor.impacted && gameTime >= meteor.impactAt) {
+                      meteor.impacted = true;
+                      playTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 130);
+                      vibrate(55);
+                      if (player != null && player.alive && distance(player.x(), player.y(), meteor.x, meteor.y) < 1.55f) {
+                          damagePlayer("被陨石击中");
+                      }
+                  }
+                  if (meteor.active && gameTime >= meteor.vanishAt) meteor.active = false;
+              }
+          
+              private boolean hasItem(ItemType type) {
+                  for (Item item : items) if (item.type == type) return true;
+                  return false;
+              }
+          
+              private boolean hasArmedBigCracker() {
+                  for (Bomb b : activeBombs) if (b.big && !b.exploded) return true;
+                  return false;
+              }
+          
+              private void spawnSafeItem(ItemType type, float lifetime, int minimumEnemyDistance) {
+                  List<int[]> candidates = new ArrayList<>();
+                  for (int y = 1; y < ROWS - 1; y++) {
+                      for (int x = 1; x < COLS - 1; x++) {
+                          if (isWall(x, y) || itemAt(x, y) || countExits(x, y) < (type == ItemType.BIG_CRACKER ? 2 : 1)) continue;
+                          if (nearestEnemyDistance(x, y) < minimumEnemyDistance) continue;
+                          if (player != null && distance(x, y, player.x(), player.y()) < 3.5f) continue;
+                          if (theme == Theme.CLOWN && inClownAttackZone(x, y)) continue;
+                          if (theme == Theme.OCEAN && type != ItemType.WORMHOLE && y > ROWS * 0.72f) continue;
+                          candidates.add(new int[]{x, y});
+                      }
+                  }
+                  if (candidates.isEmpty()) {
+                      for (int y = 1; y < ROWS - 1; y++) {
+                          for (int x = 1; x < COLS - 1; x++) {
+                              if (!isWall(x, y) && !itemAt(x, y) && countExits(x, y) >= 2) candidates.add(new int[]{x, y});
+                          }
+                      }
+                  }
+                  if (!candidates.isEmpty()) {
+                      int[] p = candidates.get(random.nextInt(candidates.size()));
+                      items.add(new Item(type, p[0], p[1], gameTime + lifetime));
+                      switch (type) {
+                          case GIFT: showMessage("神秘礼盒出现了", 1.5f); break;
+                          case HEART: showMessage("限时爱心出现：拾取后十秒内可复活", 1.8f); break;
+                          case BIG_CRACKER: showMessage("大爆竹出现：拾取后有四秒撤离", 1.8f); break;
+                          case WORMHOLE: showMessage("小虫洞出现了", 1.5f); break;
+                      }
+                  }
+              }
+          
+              private boolean itemAt(int x, int y) {
+                  for (Item item : items) if (item.x == x && item.y == y) return true;
+                  return false;
+              }
+          
+              private void updateItems() {
+                  Iterator<Item> iterator = items.iterator();
+                  while (iterator.hasNext()) {
+                      Item item = iterator.next();
+                      if (gameTime >= item.expires) iterator.remove();
+                  }
+              }
+          
+              private void collectItemAt(int x, int y) {
+                  Iterator<Item> iterator = items.iterator();
+                  while (iterator.hasNext()) {
+                      Item item = iterator.next();
+                      if (item.x != x || item.y != y) continue;
+                      iterator.remove();
+                      score += 100;
+                      playTone(ToneGenerator.TONE_PROP_ACK, 160);
+                      vibrate(30);
+                      switch (item.type) {
+                          case GIFT: activateRandomGift(); break;
+                          case HEART:
+                              heartUntil = gameTime + 10f;
+                              showMessage("爱心生效：十秒内死亡可无损复活", 2f);
+                              break;
+                          case BIG_CRACKER:
+                              activeBombs.add(new Bomb(x, y, gameTime + 4f, 3.25f, true));
+                              showMessage("大爆竹已点燃：四秒后爆炸！", 2f);
+                              break;
+                          case WORMHOLE:
+                              teleportPlayerToSafety();
+                              break;
+                      }
+                      break;
+                  }
+              }
+          
+              private void activateRandomGift() {
+                  int choice = random.nextInt(companion != null && companion.alive ? 3 : 4);
+                  if (choice == 0) {
+                      shieldUntil = gameTime + 5f;
+                      showMessage("礼盒：五秒护盾", 1.8f);
+                  } else if (choice == 1) {
+                      speedUntil = gameTime + 5f;
+                      showMessage("礼盒：五秒内移动速度 +40%", 1.8f);
+                  } else if (choice == 2) {
+                      for (Actor e : enemies) e.stunnedUntil = Math.max(e.stunnedUntil, gameTime + 2f);
+                      showMessage("礼盒：所有敌人眩晕两秒", 1.8f);
+                  } else {
+                      activateCompanion();
+                  }
+              }
+          
+              private void activateCompanion() {
+                  int[] safe = safestFloorNearPlayer();
+                  companion.place(safe[0], safe[1]);
+                  companion.spawnX = safe[0];
+                  companion.spawnY = safe[1];
+                  companion.alive = true;
+                  companion.stunnedUntil = gameTime + 0.35f;
+                  showMessage("礼盒：高智能小跟班加入！", 2.1f);
+              }
+          
+              private int[] safestFloorNearPlayer() {
+                  int px = player == null ? 1 : Math.round(player.x());
+                  int py = player == null ? ROWS - 2 : Math.round(player.y());
+                  int bestX = px;
+                  int bestY = py;
+                  float best = -Float.MAX_VALUE;
+                  for (int y = Math.max(1, py - 6); y <= Math.min(ROWS - 2, py + 6); y++) {
+                      for (int x = Math.max(1, px - 6); x <= Math.min(COLS - 2, px + 6); x++) {
+                          if (isWall(x, y)) continue;
+                          float value = nearestEnemyDistance(x, y) * 3f - distance(px, py, x, y);
+                          if (countExits(x, y) >= 2) value += 4f;
+                          if (value > best) {
+                              best = value;
+                              bestX = x;
+                              bestY = y;
+                          }
+                      }
+                  }
+                  return new int[]{bestX, bestY};
+              }
+          
+              private void teleportPlayerToSafety() {
+                  if (player == null || !player.alive) return;
+                  int bestX = player.cellX;
+                  int bestY = player.cellY;
+                  float bestValue = -Float.MAX_VALUE;
+                  for (int y = 1; y < ROWS - 1; y++) {
+                      for (int x = 1; x < COLS - 1; x++) {
+                          if (isWall(x, y) || countExits(x, y) < 2) continue;
+                          float fromPlayer = distance(x, y, player.x(), player.y());
+                          if (fromPlayer < 8f) continue;
+                          float value = nearestEnemyDistance(x, y) * 5f + countExits(x, y) * 2f + random.nextFloat() * 2f;
+                          if (value > bestValue) {
+                              bestValue = value;
+                              bestX = x;
+                              bestY = y;
+                          }
+                      }
+                  }
+                  player.place(bestX, bestY);
+                  invincibleUntil = Math.max(invincibleUntil, gameTime + 1.5f);
+                  showMessage("虫洞跃迁：已抵达远离敌人的位置", 2f);
+              }
+          
+              private void dropNormalBomb() {
+                  if (screen != Screen.PLAYING || player == null || !player.alive || player.forced || bombCount <= 0) return;
+                  int x = Math.round(player.x());
+                  int y = Math.round(player.y());
+                  for (Bomb b : activeBombs) if (!b.exploded && b.x == x && b.y == y) return;
+                  bombCount--;
+                  activeBombs.add(new Bomb(x, y, gameTime + 1.45f, 2.55f, false));
+                  showMessage("炸弹已投放", 1f);
+                  playTone(ToneGenerator.TONE_PROP_PROMPT, 70);
+              }
+          
+              private void updateBombs() {
+                  Iterator<Bomb> iterator = activeBombs.iterator();
+                  while (iterator.hasNext()) {
+                      Bomb bomb = iterator.next();
+                      if (!bomb.exploded && gameTime >= bomb.explodeAt) explodeBomb(bomb);
+                      if (bomb.exploded && gameTime >= bomb.vanishAt) iterator.remove();
+                  }
+              }
+          
+              private void explodeBomb(Bomb bomb) {
+                  bomb.exploded = true;
+                  bomb.vanishAt = gameTime + 0.58f;
+                  playTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, bomb.big ? 190 : 120);
+                  vibrate(bomb.big ? 85 : 50);
+                  for (Actor enemy : enemies) {
+                      if (enemy != null && enemy.alive && distance(enemy.x(), enemy.y(), bomb.x, bomb.y) <= bomb.radius) {
+                          enemy.stunnedUntil = Math.max(enemy.stunnedUntil, gameTime + (bomb.big ? 2.6f : 2.2f));
+                          enemy.revealed = true;
+                      }
+                  }
+                  if (bomb.big) {
+                      if (player != null && player.alive && distance(player.x(), player.y(), bomb.x, bomb.y) <= bomb.radius) {
+                          damagePlayer("被自己点燃的大爆竹炸到");
+                      }
+                      breakWallsAround(bomb.x, bomb.y, bomb.radius);
+                      showMessage("爆竹炸开墙壁，八秒后恢复", 2f);
+                  }
+              }
+          
+              private void breakWallsAround(int cx, int cy, float radius) {
+                  for (int y = 1; y < ROWS - 1; y++) {
+                      for (int x = 1; x < COLS - 1; x++) {
+                          if (!walls[y][x] || distance(x, y, cx, cy) > radius) continue;
+                          brokenUntil[y][x] = Math.max(brokenUntil[y][x], gameTime + 8f);
+                      }
+                  }
+                  wallCacheDirty = true;
+              }
+          
+              private void updateBrokenWalls() {
+                  boolean changed = false;
+                  for (int y = 1; y < ROWS - 1; y++) {
+                      for (int x = 1; x < COLS - 1; x++) {
+                          if (brokenUntil[y][x] <= 0f || gameTime < brokenUntil[y][x]) continue;
+                          if (cellOccupied(x, y)) {
+                              brokenUntil[y][x] = gameTime + 0.65f;
+                          } else {
+                              brokenUntil[y][x] = 0f;
+                              changed = true;
+                          }
+                      }
+                  }
+                  if (changed) wallCacheDirty = true;
+              }
+          
+              private boolean cellOccupied(int x, int y) {
+                  if (player != null && player.alive && distance(player.x(), player.y(), x, y) < 0.72f) return true;
+                  if (companion != null && companion.alive && distance(companion.x(), companion.y(), x, y) < 0.72f) return true;
+                  for (Actor e : enemies) if (e != null && e.alive && distance(e.x(), e.y(), x, y) < 0.72f) return true;
+                  return false;
+              }
+          
+              private void updateGalaxyPull() {
+                  if (!blackHoleRunning) return;
+                  int[] core = nearestPassable(COLS / 2, ROWS / 2);
+                  if (!blackHolePullStarted && gameTime >= blackHoleActiveAt) {
+                      blackHolePullStarted = true;
+                      if (blackHoleMode == 0) {
+                          if (player != null && player.alive) beginPull(player);
+                      } else {
+                          for (Actor enemy : enemies) if (enemy != null && enemy.alive) beginPull(enemy);
+                      }
+                  }
+                  if (blackHolePullStarted) {
+                      float p = clamp01((gameTime - blackHoleActiveAt) / Math.max(0.01f, blackHoleEnd - blackHoleActiveAt));
+                      float eased = p * p * (3f - 2f * p);
+                      if (blackHoleMode == 0) {
+                          if (player != null && player.forced) updatePullPosition(player, core[0], core[1], eased);
+                      } else {
+                          for (Actor enemy : enemies) if (enemy != null && enemy.forced) updatePullPosition(enemy, core[0], core[1], eased);
+                      }
+                  }
+                  if (gameTime >= blackHoleEnd) finishBlackHole(core[0], core[1]);
+              }
+          
+              private void beginPull(Actor actor) {
+                  actor.pullStartX = actor.x();
+                  actor.pullStartY = actor.y();
+                  actor.forcedX = actor.pullStartX;
+                  actor.forcedY = actor.pullStartY;
+                  actor.forced = true;
+              }
+          
+              private void updatePullPosition(Actor actor, float tx, float ty, float p) {
+                  actor.forcedX = lerp(actor.pullStartX, tx, p);
+                  actor.forcedY = lerp(actor.pullStartY, ty, p);
+              }
+          
+              private void finishBlackHole(int coreX, int coreY) {
+                  if (blackHoleMode == 0) {
+                      if (player != null && player.forced) {
+                          int[] safe = safestFloorAround(coreX, coreY, 0);
+                          player.place(safe[0], safe[1]);
+                          invincibleUntil = Math.max(invincibleUntil, gameTime + 2f);
+                          globalScatterUntil = gameTime + 2.5f;
+                      }
+                  } else {
+                      int[][] offsets = {{-2, 0}, {2, 0}, {0, -2}, {0, 2}};
+                      for (int i = 0; i < enemies.length; i++) {
+                          Actor enemy = enemies[i];
+                          if (enemy != null && enemy.forced) {
+                              int[] p = safestFloorAround(coreX + offsets[i][0], coreY + offsets[i][1], i);
+                              enemy.place(p[0], p[1]);
+                              enemy.stunnedUntil = gameTime + 2f;
+                          }
+                      }
+                  }
+                  blackHoleRunning = false;
+                  blackHolePullStarted = false;
+                  showMessage(blackHoleMode == 0 ? "黑洞释放：获得两秒安全时间" : "敌人被聚拢并眩晕两秒", 1.8f);
+              }
+          
+              private int[] safestFloorAround(int tx, int ty, int salt) {
+                  int bestX = tx;
+                  int bestY = ty;
+                  float best = -Float.MAX_VALUE;
+                  for (int y = Math.max(1, ty - 5); y <= Math.min(ROWS - 2, ty + 5); y++) {
+                      for (int x = Math.max(1, tx - 5); x <= Math.min(COLS - 2, tx + 5); x++) {
+                          if (isWall(x, y)) continue;
+                          float value = -distance(x, y, tx, ty) + countExits(x, y) * 0.5f + ((x + y + salt) % 3) * 0.1f;
+                          if (value > best) {
+                              best = value;
+                              bestX = x;
+                              bestY = y;
+                          }
+                      }
+                  }
+                  return new int[]{bestX, bestY};
+              }
+          
+              private void checkCollisions() {
+                  for (Actor enemy : enemies) {
+                      if (enemy == null || !enemy.alive || enemy.forced || gameTime < enemy.stunnedUntil) continue;
+                      if (player != null && player.alive && !player.forced
+                              && actorDistance(enemy, player) < 0.58f && gameTime >= safeUntil) {
+                          enemy.revealed = true;
+                          if (gameTime < powerUntil) eatEnemy(enemy);
+                          else damagePlayer("被敌人抓到");
+                      }
+                      if (companion != null && companion.alive && !companion.forced
+                              && actorDistance(enemy, companion) < 0.56f) {
+                          enemy.revealed = true;
+                          if (gameTime < powerUntil) eatEnemy(enemy);
+                          else damageCompanion();
+                      }
+                  }
+              }
+          
+              private void eatEnemy(Actor enemy) {
+                  enemyEatChain++;
+                  score += 200 * (1 << Math.min(3, enemyEatChain - 1));
+                  enemy.place(enemy.spawnX, enemy.spawnY);
+                  enemy.stunnedUntil = gameTime + 1.25f;
+                  enemy.revealed = true;
+                  showMessage("反击成功！", 0.9f);
+                  playTone(ToneGenerator.TONE_PROP_ACK, 90);
+              }
+          
+              private void damagePlayer(String reason) {
+                  if (player == null || !player.alive || gameTime < invincibleUntil || player.forced) return;
+                  if (gameTime < shieldUntil) {
+                      shieldUntil = 0f;
+                      invincibleUntil = gameTime + 0.8f;
+                      for (Actor enemy : enemies) {
+                          if (enemy != null && actorDistance(enemy, player) < 2.2f) enemy.stunnedUntil = gameTime + 1.2f;
+                      }
+                      showMessage("护盾抵消了一次伤害", 1.5f);
+                      playTone(ToneGenerator.TONE_PROP_NACK, 90);
+                      return;
+                  }
+          
+                  playTone(ToneGenerator.TONE_CDMA_ABBR_ALERT, 220);
+                  vibrate(90);
+                  player.alive = false;
+                  player.forced = false;
+                  if (gameTime < heartUntil) {
+                      heartUntil = 0f;
+                      heartRevive = true;
+                      reviveAt = gameTime + 2f;
+                      showMessage(reason + "；爱心将在两秒后复活你", 2f);
+                      return;
+                  }
+          
+                  lives--;
+                  if (lives > 0) {
+                      heartRevive = false;
+                      reviveAt = gameTime + 1.35f;
+                      showMessage(reason + "；剩余生命 " + lives, 1.7f);
+                  } else if (companion != null && companion.alive) {
+                      reviveAt = -1f;
+                      companionOnly = true;
+                      showMessage("玩家已阵亡，小跟班接管游戏", 2.5f);
+                  } else {
+                      finishGame(false);
+                  }
+              }
+          
+              private void damageCompanion() {
+                  if (companion == null || !companion.alive) return;
+                  companion.alive = false;
+                  companion.forced = false;
+                  showMessage("小跟班被抓到了", 1.8f);
+                  playTone(ToneGenerator.TONE_PROP_NACK, 110);
+                  if ((player == null || !player.alive) && reviveAt < 0f) finishGame(false);
+              }
+          
+              private void updateRevival() {
+                  if (reviveAt < 0f || gameTime < reviveAt) return;
+                  reviveAt = -1f;
+                  player.alive = true;
+                  player.place(player.spawnX, player.spawnY);
+                  invincibleUntil = gameTime + 2.4f;
+                  safeUntil = gameTime + 2.4f;
+                  if (heartRevive) {
+                      for (Actor enemy : enemies) {
+                          if (enemy != null && distance(enemy.x(), enemy.y(), player.x(), player.y()) <= 7f) {
+                              enemy.stunnedUntil = gameTime + 2f;
+                          }
+                      }
+                      showMessage("爱心复活：周围敌人眩晕两秒", 2f);
+                  } else {
+                      globalScatterUntil = gameTime + 2f;
+                  }
+                  heartRevive = false;
+              }
+          
+              private void finishGame(boolean won) {
+                  if (score > bestScore) {
+                      bestScore = score;
+                      prefs.edit().putInt("最高分_" + theme.ordinal(), score).apply();
+                  }
+                  screen = won ? Screen.WIN : Screen.GAME_OVER;
+                  lastFrameNanos = 0L;
+                  playTone(won ? ToneGenerator.TONE_PROP_ACK : ToneGenerator.TONE_PROP_NACK, won ? 280 : 220);
+                  invalidate();
+              }
+          
+              private void showMessage(String text, float seconds) {
+                  banner = text;
+                  bannerUntil = gameTime + seconds;
+              }
+          
+              private float actorDistance(Actor a, Actor b) {
+                  float dx = Math.abs(a.x() - b.x());
+                  if (theme == Theme.CLASSIC) dx = Math.min(dx, COLS - dx);
+                  float dy = a.y() - b.y();
+                  return (float) Math.sqrt(dx * dx + dy * dy);
+              }
+          
+              private void drawHome(Canvas canvas) {
+                  drawMenuBackground(canvas);
+                  float pulse = 1f + 0.035f * (float) Math.sin(System.nanoTime() / 450_000_000.0);
+                  float cx = viewW * 0.5f;
+                  float cy = viewH * 0.28f;
+                  paint.setShader(new RadialGradient(cx, cy, viewW * 0.34f,
+                          0x66FFD54F, 0x0010052E, Shader.TileMode.CLAMP));
+                  canvas.drawCircle(cx, cy, viewW * 0.34f, paint);
+                  paint.setShader(null);
+                  drawPacShape(canvas, cx, cy, viewW * 0.115f * pulse, Dir.RIGHT, 0xFFFFD84A);
+                  for (int i = 0; i < 4; i++) {
+                      float x = cx + viewW * (0.19f + i * 0.065f);
+                      paint.setColor(i == 3 ? 0xFFFF73B9 : 0xFFFFDFA3);
+                      canvas.drawCircle(x, cy, viewW * 0.009f, paint);
+                  }
+                  drawStar(canvas, cx - viewW * 0.24f, cy - viewH * 0.03f, viewW * 0.027f, 0xFFFFC857);
+                  drawPlanet(canvas, cx - viewW * 0.27f, cy + viewH * 0.065f, viewW * 0.022f, 0xFF70D7FF);
+          
+                  textPaint.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
+                  drawCenteredText(canvas, "星豆迷宫", cx, viewH * 0.44f, viewW * 0.095f, Color.WHITE);
+                  textPaint.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+                  drawCenteredText(canvas, "每一局，都是一张新迷宫", cx, viewH * 0.495f,
+                          viewW * 0.037f, 0xFFCDD4FF);
+          
+                  drawRoundedButton(canvas, startButton, "开始游戏", 0xFFFFC857, 0xFF32154F);
+                  drawRoundedButton(canvas, guideButton, "玩法与 AI", 0x3328B8FF, Color.WHITE);
+                  drawCenteredText(canvas, "五种主题 · 四类敌人策略 · 高智能小跟班", cx,
+                          viewH * 0.82f, viewW * 0.029f, 0xFFA9B2D8);
+                  drawCenteredText(canvas, "v1.0 · 原生离线版", cx,
+                          viewH * 0.875f, viewW * 0.025f, 0xFF707BA8);
+              }
+          
+              private void drawMenuBackground(Canvas canvas) {
+                  paint.setShader(new LinearGradient(0, 0, viewW, viewH,
+                          new int[]{0xFF10052E, 0xFF311054, 0xFF071A3A},
+                          new float[]{0f, 0.48f, 1f}, Shader.TileMode.CLAMP));
+                  canvas.drawRect(0, 0, viewW, viewH, paint);
+                  paint.setShader(null);
+                  float t = (System.nanoTime() / 1_000_000_000L) % 1000;
+                  for (int i = 0; i < starX.length; i++) {
+                      int alpha = 70 + (int) (80 * (0.5 + 0.5 * Math.sin(t * 1.4 + i)));
+                      paint.setColor(Color.argb(alpha, 220, 230, 255));
+                      canvas.drawCircle(starX[i] * viewW, starY[i] * viewH,
+                              starSize[i] * viewW / 360f, paint);
+                  }
+              }
+          
+              private void drawMapSelect(Canvas canvas) {
+                  drawMenuBackground(canvas);
+                  drawBackButton(canvas, "返回");
+                  drawCenteredText(canvas, "选择主题地图", viewW * 0.5f, viewH * 0.085f,
+                          viewW * 0.065f, Color.WHITE);
+                  drawCenteredText(canvas, "迷宫会在每次进入时重新生成并验证连通性", viewW * 0.5f,
+                          viewH * 0.125f, viewW * 0.027f, 0xFFB8C2EC);
+                  Theme[] themes = Theme.values();
+                  for (int i = 0; i < themes.length; i++) drawMapCard(canvas, mapCards[i], themes[i], i);
+              }
+          
+              private void drawMapCard(Canvas canvas, RectF r, Theme t, int index) {
+                  paint.setShader(new LinearGradient(r.left, r.top, r.right, r.bottom,
+                          mixColor(t.dark, Color.WHITE, 0.08f), mixColor(t.dark, Color.BLACK, 0.25f),
+                          Shader.TileMode.CLAMP));
+                  canvas.drawRoundRect(r, viewW * 0.035f, viewW * 0.035f, paint);
+                  paint.setShader(null);
+                  strokePaint.setStrokeWidth(viewW * 0.004f);
+                  strokePaint.setColor(Color.argb(180, Color.red(t.accent), Color.green(t.accent), Color.blue(t.accent)));
+                  canvas.drawRoundRect(r, viewW * 0.035f, viewW * 0.035f, strokePaint);
+                  float iconX = r.centerX();
+                  float iconY = r.top + r.height() * 0.32f;
+                  float size = Math.min(r.width(), r.height()) * 0.13f;
+                  switch (index) {
+                      case 0: drawMiniClown(canvas, iconX, iconY, size * 1.3f); break;
+                      case 1: drawPacShape(canvas, iconX, iconY, size, Dir.RIGHT, 0xFFFFD84A); break;
+                      case 2: drawFish(canvas, iconX, iconY, size * 1.5f, 0xFF56D8FF, false, 0); break;
+                      case 3: drawFirecracker(canvas, iconX, iconY, size * 1.1f, true); break;
+                      case 4: drawPlanet(canvas, iconX, iconY, size, 0xFF9B8DFF); break;
+                  }
+                  drawCenteredText(canvas, t.title, r.centerX(), r.top + r.height() * 0.61f,
+                          viewW * 0.040f, Color.WHITE);
+                  drawCenteredText(canvas, t.subtitle, r.centerX(), r.top + r.height() * 0.78f,
+                          viewW * 0.0215f, 0xFFD8DEFA);
+                  int best = prefs.getInt("最高分_" + index, 0);
+                  drawCenteredText(canvas, best > 0 ? "最高分 " + best : "点击进入", r.centerX(),
+                          r.top + r.height() * 0.92f, viewW * 0.0195f, t.accent);
+              }
+          
+              private void drawGuide(Canvas canvas) {
+                  drawMenuBackground(canvas);
+                  drawBackButton(canvas, "返回");
+                  drawCenteredText(canvas, "玩法与 AI", viewW * 0.5f, viewH * 0.085f,
+                          viewW * 0.065f, Color.WHITE);
+                  float left = viewW * 0.08f;
+                  float right = viewW * 0.92f;
+                  float top = viewH * 0.14f;
+                  float bottom = viewH * 0.91f;
+                  tmpRect.set(left, top, right, bottom);
+                  paint.setColor(0xAA171538);
+                  canvas.drawRoundRect(tmpRect, viewW * 0.04f, viewW * 0.04f, paint);
+                  strokePaint.setColor(0x557D8CFF);
+                  strokePaint.setStrokeWidth(viewW * 0.003f);
+                  canvas.drawRoundRect(tmpRect, viewW * 0.04f, viewW * 0.04f, strokePaint);
+          
+                  float x = left + viewW * 0.055f;
+                  float y = top + viewH * 0.055f;
+                  float titleSize = viewW * 0.039f;
+                  float bodySize = viewW * 0.027f;
+                  drawLeftText(canvas, "目标", x, y, titleSize, 0xFFFFD05A);
+                  y += viewH * 0.04f;
+                  drawLeftText(canvas, "收完全部主题豆子即可通关。四颗大型能量豆能让敌人暂时可被反击。", x, y, bodySize, Color.WHITE);
+                  y += viewH * 0.075f;
+                  drawLeftText(canvas, "四类敌人", x, y, titleSize, 0xFFFF7EB6);
+                  y += viewH * 0.04f;
+                  drawLeftText(canvas, "红：最短路追踪    粉：预判四格伏击", x, y, bodySize, Color.WHITE);
+                  y += viewH * 0.034f;
+                  drawLeftText(canvas, "青：参考红色位置夹击    橙：远追近退", x, y, bodySize, Color.WHITE);
+                  y += viewH * 0.066f;
+                  drawLeftText(canvas, "小跟班", x, y, titleSize, 0xFF67F0C0);
+                  y += viewH * 0.04f;
+                  drawLeftText(canvas, "会收集豆子、评估敌人预判位置、避开死胡同和主题危险。", x, y, bodySize, Color.WHITE);
+                  y += viewH * 0.034f;
+                  drawLeftText(canvas, "玩家最后一条命耗尽后，它会继续独自挑战，直到通关或被抓。", x, y, bodySize, Color.WHITE);
+                  y += viewH * 0.066f;
+                  drawLeftText(canvas, "公平机制", x, y, titleSize, 0xFF7DD9FF);
+                  y += viewH * 0.04f;
+                  drawLeftText(canvas, "潮汐、陨石、小丑攻击和黑洞均有预警；危险道具只在有逃生路线时生成。", x, y, bodySize, Color.WHITE);
+                  y += viewH * 0.066f;
+                  drawLeftText(canvas, "操作", x, y, titleSize, 0xFFC6A4FF);
+                  y += viewH * 0.04f;
+                  drawLeftText(canvas, "下方区域可切换摇杆/方向键；右侧炸弹可眩晕范围内敌人。", x, y, bodySize, Color.WHITE);
+                  y += viewH * 0.034f;
+                  drawLeftText(canvas, "每收集 80 颗豆子补充一枚炸弹，最多携带五枚。", x, y, bodySize, Color.WHITE);
+              }
+          
+              private void drawGame(Canvas canvas) {
+                  drawThemeBackground(canvas);
+                  ensureWallCache();
+                  if (wallCache != null) canvas.drawBitmap(wallCache, 0, 0, paint);
+                  drawPellets(canvas);
+                  drawRestoringWalls(canvas);
+                  drawItems(canvas);
+                  drawBombs(canvas);
+                  if (theme == Theme.GALAXY) {
+                      drawMeteor(canvas);
+                      drawBlackHole(canvas);
+                  }
+                  if (theme == Theme.CLOWN) drawGiantClown(canvas);
+                  drawActors(canvas);
+                  if (theme == Theme.OCEAN) drawTide(canvas);
+                  drawHud(canvas);
+                  drawControls(canvas);
+                  drawBanner(canvas);
+                  if (reviveAt > gameTime) drawReviveCountdown(canvas);
+                  if (screen == Screen.PAUSED || screen == Screen.GAME_OVER || screen == Screen.WIN) drawGameOverlay(canvas);
+              }
+          
+              private void drawThemeBackground(Canvas canvas) {
+                  paint.setShader(backgroundShader);
+                  canvas.drawRect(0, 0, viewW, viewH, paint);
+                  paint.setShader(null);
+                  if (theme == Theme.CLOWN) {
+                      float cx = viewW * 0.5f;
+                      for (int i = 0; i < 10; i++) {
+                          path.reset();
+                          path.moveTo(cx, originY + cell * 14f);
+                          float x1 = (i - 1) * viewW / 8f;
+                          path.lineTo(x1, mazeTop);
+                          path.lineTo(x1 + viewW / 8f, mazeTop);
+                          path.close();
+                          paint.setColor(i % 2 == 0 ? 0x1228CFFF : 0x12FFDC52);
+                          canvas.drawPath(path, paint);
+                      }
+                      drawBalloon(canvas, originX + cell * 2f, originY + cell * 4f, cell * 0.55f, 0xFFFF5A8D);
+                      drawBalloon(canvas, originX + cell * 22f, originY + cell * 8f, cell * 0.55f, 0xFF65E6FF);
+                  } else if (theme == Theme.OCEAN) {
+                      paint.setColor(0x2234C9E8);
+                      strokePaint.setStrokeWidth(cell * 0.08f);
+                      strokePaint.setColor(0x443DE6FF);
+                      for (int i = 0; i < 5; i++) {
+                          float y = originY + cell * (3 + i * 6);
+                          path.reset();
+                          path.moveTo(originX, y);
+                          for (int x = 0; x <= 20; x++) {
+                              float px = originX + x * cell * 1.25f;
+                              float py = y + (float) Math.sin(x * 0.9 + gameTime) * cell * 0.22f;
+                              path.lineTo(px, py);
+                          }
+                          canvas.drawPath(path, strokePaint);
+                      }
+                  } else if (theme == Theme.SPRING) {
+                      drawFireworks(canvas);
+                      paint.setColor(0x22FFD060);
+                      for (int i = 0; i < 8; i++) {
+                          float y = originY + (i * 3.6f + 1f) * cell;
+                          canvas.drawCircle(originX + cell * 0.45f, y, cell * 0.12f, paint);
+                          canvas.drawCircle(originX + cell * 24.55f, y, cell * 0.12f, paint);
+                      }
+                  } else if (theme == Theme.GALAXY) {
+                      float t = gameTime;
+                      for (int i = 0; i < starX.length; i++) {
+                          int alpha = 90 + (int) (100 * (0.5 + 0.5 * Math.sin(t * 1.6 + i)));
+                          paint.setColor(Color.argb(alpha, 210, 225, 255));
+                          canvas.drawCircle(starX[i] * viewW, starY[i] * controlTop,
+                                  starSize[i] * cell * 0.06f, paint);
+                      }
+                      paint.setShader(new LinearGradient(0, mazeTop, viewW, mazeBottom,
+                              0x00387DFF, 0x333BD6E6, Shader.TileMode.CLAMP));
+                      canvas.save();
+                      canvas.rotate(-18f, viewW / 2f, (mazeTop + mazeBottom) / 2f);
+                      canvas.drawOval(viewW * 0.08f, (mazeTop + mazeBottom) / 2f - cell * 2.3f,
+                              viewW * 0.92f, (mazeTop + mazeBottom) / 2f + cell * 2.3f, paint);
+                      canvas.restore();
+                      paint.setShader(null);
+                  }
+              }
+          
+              private void ensureWallCache() {
+                  if (!wallCacheDirty || viewW <= 0 || controlTop <= 0) return;
+                  if (wallCache != null) wallCache.recycle();
+                  wallCache = Bitmap.createBitmap(viewW, Math.max(1, (int) Math.ceil(controlTop)), Bitmap.Config.ARGB_8888);
+                  Canvas cache = new Canvas(wallCache);
+                  for (int y = 0; y < ROWS; y++) {
+                      for (int x = 0; x < COLS; x++) {
+                          if (isWall(x, y)) drawWallCell(cache, x, y);
+                      }
+                  }
+                  wallCacheDirty = false;
+              }
+          
+              private void drawWallCell(Canvas canvas, int x, int y) {
+                  float l = originX + x * cell;
+                  float t = originY + y * cell;
+                  float inset = cell * 0.045f;
+                  tmpRect.set(l + inset, t + inset, l + cell - inset, t + cell - inset);
+                  int fill;
+                  int line;
+                  switch (theme) {
+                      case CLOWN: fill = ((x + y) & 1) == 0 ? 0xFF61217B : 0xFF442069; line = 0xFFFFC857; break;
+                      case CLASSIC: fill = 0xFF08255E; line = 0xFF257CFF; break;
+                      case OCEAN: fill = ((x * 3 + y) % 5 == 0) ? 0xFF0C6A79 : 0xFF07536E; line = 0xFF37D3D7; break;
+                      case SPRING: fill = 0xFF8D1420; line = 0xFFFFC94F; break;
+                      default: fill = 0xFF241258; line = 0xFF8E76FF; break;
+                  }
+                  paint.setColor(fill);
+                  canvas.drawRoundRect(tmpRect, cell * 0.19f, cell * 0.19f, paint);
+                  strokePaint.setStrokeWidth(Math.max(1f, cell * 0.075f));
+                  strokePaint.setColor(line);
+                  canvas.drawRoundRect(tmpRect, cell * 0.19f, cell * 0.19f, strokePaint);
+                  if (theme == Theme.SPRING && (x * 13 + y * 7) % 43 == 0 && cell > 15f) {
+                      drawCenteredText(canvas, (x + y) % 2 == 0 ? "春" : "福",
+                              l + cell / 2f, t + cell * 0.73f, cell * 0.48f, 0xFFFFD96A);
+                  }
+                  if (theme == Theme.OCEAN && (x * 11 + y * 5) % 37 == 0) {
+                      paint.setColor(0xFF76E6D1);
+                      canvas.drawCircle(l + cell * 0.5f, t + cell * 0.5f, cell * 0.12f, paint);
+                  }
+              }
+          
+              private void drawPellets(Canvas canvas) {
+                  float pulse = 0.82f + 0.18f * (float) Math.sin(gameTime * 5f);
+                  for (int y = 0; y < ROWS; y++) {
+                      for (int x = 0; x < COLS; x++) {
+                          float px = gx(x);
+                          float py = gy(y);
+                          if (powerPellets[y][x]) {
+                              paint.setColor(Color.argb(60, 255, 255, 255));
+                              canvas.drawCircle(px, py, cell * 0.34f * pulse, paint);
+                              drawThemePellet(canvas, px, py, cell * 0.22f, true);
+                          } else if (pellets[y][x]) {
+                              drawThemePellet(canvas, px, py, cell * 0.115f, false);
+                          }
+                      }
+                  }
+              }
+          
+              private void drawThemePellet(Canvas canvas, float x, float y, float size, boolean power) {
+                  switch (theme) {
+                      case CLOWN: drawStar(canvas, x, y, size, power ? Color.WHITE : 0xFFFFD25B); break;
+                      case CLASSIC:
+                          paint.setColor(power ? 0xFFFFF5D0 : 0xFFFFDFA8);
+                          canvas.drawCircle(x, y, size * (power ? 0.9f : 0.55f), paint);
+                          break;
+                      case OCEAN: drawShell(canvas, x, y, size, power); break;
+                      case SPRING: drawFirecracker(canvas, x, y, size, power); break;
+                      case GALAXY: drawPlanet(canvas, x, y, size * (power ? 1.05f : 0.75f),
+                              power ? 0xFFFFD36A : 0xFF6BC8FF); break;
+                  }
+              }
+          
+              private void drawRestoringWalls(Canvas canvas) {
+                  for (int y = 1; y < ROWS - 1; y++) {
+                      for (int x = 1; x < COLS - 1; x++) {
+                          if (brokenUntil[y][x] <= gameTime) continue;
+                          float remain = brokenUntil[y][x] - gameTime;
+                          float px = gx(x);
+                          float py = gy(y);
+                          paint.setColor(remain < 2f && ((int) (gameTime * 7) & 1) == 0 ? 0xAAFFD45B : 0x665E3029);
+                          canvas.drawCircle(px - cell * 0.18f, py + cell * 0.23f, cell * 0.13f, paint);
+                          canvas.drawCircle(px + cell * 0.17f, py + cell * 0.27f, cell * 0.11f, paint);
+                      }
+                  }
+              }
+          
+              private void drawItems(Canvas canvas) {
+                  for (Item item : items) {
+                      float x = gx(item.x);
+                      float y = gy(item.y);
+                      float pulse = 1f + 0.08f * (float) Math.sin(gameTime * 6f + item.x);
+                      paint.setColor(0x44FFFFFF);
+                      canvas.drawCircle(x, y, cell * 0.46f * pulse, paint);
+                      switch (item.type) {
+                          case GIFT: drawGift(canvas, x, y, cell * 0.30f); break;
+                          case HEART: drawHeart(canvas, x, y, cell * 0.30f, 0xFFFF4D7E); break;
+                          case BIG_CRACKER: drawFirecracker(canvas, x, y, cell * 0.35f, true); break;
+                          case WORMHOLE: drawWormhole(canvas, x, y, cell * 0.34f); break;
+                      }
+                  }
+              }
+          
+              private void drawBombs(Canvas canvas) {
+                  for (Bomb bomb : activeBombs) {
+                      float x = gx(bomb.x);
+                      float y = gy(bomb.y);
+                      if (!bomb.exploded) {
+                          float left = Math.max(0f, bomb.explodeAt - gameTime);
+                          float pulse = 1f + 0.09f * (float) Math.sin(gameTime * 13f);
+                          if (bomb.big) {
+                              drawFirecracker(canvas, x, y, cell * 0.39f * pulse, true);
+                              strokePaint.setColor(0x88FFD458);
+                              strokePaint.setStrokeWidth(cell * 0.07f);
+                              canvas.drawCircle(x, y, bomb.radius * cell, strokePaint);
+                              drawCenteredText(canvas, String.valueOf((int) Math.ceil(left)), x,
+                                      y - cell * 0.55f, cell * 0.42f, Color.WHITE);
+                          } else {
+                              paint.setColor(0xFF24242E);
+                              canvas.drawCircle(x, y, cell * 0.30f * pulse, paint);
+                              paint.setColor(0xFFFFD65C);
+                              canvas.drawCircle(x + cell * 0.19f, y - cell * 0.26f, cell * 0.075f, paint);
+                          }
+                      } else {
+                          float p = clamp01((bomb.vanishAt - gameTime) / 0.58f);
+                          paint.setShader(new RadialGradient(x, y, bomb.radius * cell,
+                                  Color.argb((int) (190 * p), 255, 239, 105),
+                                  Color.argb(0, 255, 80, 20), Shader.TileMode.CLAMP));
+                          canvas.drawCircle(x, y, bomb.radius * cell * (1.15f - p * 0.2f), paint);
+                          paint.setShader(null);
+                      }
+                  }
+              }
+          
+              private void drawMeteor(Canvas canvas) {
+                  if (!meteor.active) return;
+                  float x = gx(meteor.x);
+                  float y = gy(meteor.y);
+                  if (!meteor.impacted) {
+                      float left = Math.max(0f, meteor.impactAt - gameTime);
+                      float pulse = 0.75f + 0.25f * (float) Math.sin(gameTime * 15f);
+                      paint.setColor(Color.argb(55, 255, 70, 70));
+                      canvas.drawCircle(x, y, cell * 1.55f * pulse, paint);
+                      strokePaint.setColor(0xFFFF5364);
+                      strokePaint.setStrokeWidth(cell * 0.11f);
+                      canvas.drawCircle(x, y, cell * 1.45f, strokePaint);
+                      drawCenteredText(canvas, "!", x, y + cell * 0.28f, cell * 0.92f, Color.WHITE);
+                      drawCenteredText(canvas, String.format(Locale.US, "%.1f", left), x,
+                              y - cell * 1.15f, cell * 0.33f, 0xFFFFA1A8);
+                  } else {
+                      paint.setColor(0xFF482B3B);
+                      canvas.drawOval(x - cell * 1.3f, y - cell * 0.60f,
+                              x + cell * 1.3f, y + cell * 0.60f, paint);
+                      paint.setColor(0xFF8D655E);
+                      canvas.drawCircle(x - cell * 0.33f, y - cell * 0.08f, cell * 0.24f, paint);
+                      canvas.drawCircle(x + cell * 0.42f, y + cell * 0.10f, cell * 0.17f, paint);
+                      float p = clamp01((meteor.vanishAt - gameTime) / 0.65f);
+                      paint.setColor(Color.argb((int) (180 * p), 255, 130, 75));
+                      canvas.drawCircle(x, y, cell * (1.8f - p * 0.5f), paint);
+                  }
+              }
+          
+              private void drawBlackHole(Canvas canvas) {
+                  if (!blackHoleRunning) return;
+                  int[] core = nearestPassable(COLS / 2, ROWS / 2);
+                  float x = gx(core[0]);
+                  float y = gy(core[1]);
+                  float activeP = gameTime < blackHoleActiveAt
+                          ? clamp01((gameTime - blackHoleStart) / (blackHoleActiveAt - blackHoleStart))
+                          : 1f;
+                  float r = cell * (0.4f + activeP * 1.45f);
+                  paint.setShader(new RadialGradient(x, y, r * 1.8f,
+                          new int[]{0xFF020008, 0xFF351170, 0xAA6F4DFF, 0x0060DFFF},
+                          new float[]{0f, 0.48f, 0.75f, 1f}, Shader.TileMode.CLAMP));
+                  canvas.drawCircle(x, y, r * 1.8f, paint);
+                  paint.setShader(null);
+                  strokePaint.setStrokeWidth(cell * 0.12f);
+                  for (int i = 0; i < 3; i++) {
+                      strokePaint.setColor(Color.argb(160 - i * 35, 150 + i * 25, 100, 255));
+                      tmpRect.set(x - r * (1f + i * 0.3f), y - r * (0.45f + i * 0.12f),
+                              x + r * (1f + i * 0.3f), y + r * (0.45f + i * 0.12f));
+                      canvas.save();
+                      canvas.rotate(gameTime * (80f + i * 28f) * (i % 2 == 0 ? 1 : -1), x, y);
+                      canvas.drawOval(tmpRect, strokePaint);
+                      canvas.restore();
+                  }
+                  if (gameTime < blackHoleActiveAt) {
+                      drawCenteredText(canvas, blackHoleMode == 0 ? "吸引玩家" : "吸引敌人",
+                              x, y - cell * 2.2f, cell * 0.36f, 0xFFE1D8FF);
+                  }
+              }
+          
+              private void drawGiantClown(Canvas canvas) {
+                  float x = gx(12);
+                  float y = gy(14);
+                  float s = cell * 1.38f;
+                  // 肩膀和衣领
+                  paint.setColor(0xFF7C3CD2);
+                  canvas.drawOval(x - s * 0.95f, y + s * 0.25f, x + s * 0.95f, y + s * 1.0f, paint);
+                  paint.setColor(0xFFFFD54F);
+                  path.reset();
+                  path.moveTo(x - s * 0.85f, y + s * 0.45f);
+                  path.lineTo(x - s * 0.35f, y + s * 0.10f);
+                  path.lineTo(x, y + s * 0.55f);
+                  path.lineTo(x + s * 0.35f, y + s * 0.10f);
+                  path.lineTo(x + s * 0.85f, y + s * 0.45f);
+                  path.close();
+                  canvas.drawPath(path, paint);
+                  // 脸与头发
+                  paint.setColor(0xFFFFF1D7);
+                  canvas.drawCircle(x, y, s * 0.72f, paint);
+                  paint.setColor(0xFFFF5A78);
+                  for (int i = -3; i <= 3; i++) {
+                      double a = Math.PI * (0.18 + (i + 3) * 0.11);
+                      canvas.drawCircle(x + (float) Math.cos(a) * s * 0.66f,
+                              y - (float) Math.sin(a) * s * 0.63f, s * 0.23f, paint);
+                  }
+                  // 帽子
+                  paint.setColor(0xFF36D6B4);
+                  path.reset();
+                  path.moveTo(x - s * 0.50f, y - s * 0.55f);
+                  path.lineTo(x, y - s * 1.16f);
+                  path.lineTo(x + s * 0.50f, y - s * 0.55f);
+                  path.close();
+                  canvas.drawPath(path, paint);
+                  paint.setColor(0xFFFFD54F);
+                  canvas.drawCircle(x, y - s * 1.12f, s * 0.14f, paint);
+                  // 五官
+                  paint.setColor(0xFF21223C);
+                  canvas.drawOval(x - s * 0.36f, y - s * 0.20f, x - s * 0.17f, y + s * 0.04f, paint);
+                  canvas.drawOval(x + s * 0.17f, y - s * 0.20f, x + s * 0.36f, y + s * 0.04f, paint);
+                  paint.setColor(0xFFFF3C4F);
+                  canvas.drawCircle(x, y + s * 0.08f, s * 0.20f, paint);
+                  strokePaint.setStrokeWidth(s * 0.065f);
+                  strokePaint.setColor(0xFFB62B4D);
+                  path.reset();
+                  path.moveTo(x - s * 0.32f, y + s * 0.35f);
+                  path.quadTo(x, y + s * 0.63f, x + s * 0.32f, y + s * 0.35f);
+                  canvas.drawPath(path, strokePaint);
+          
+                  float elapsed = gameTime - clownAttackStart;
+                  if (elapsed >= 0f && elapsed < 1.18f) drawClownAttack(canvas, x, y, s, elapsed);
+                  if (clownWaveStart >= 0f && gameTime - clownWaveStart < 1.2f) {
+                      float wave = (float) Math.sin((gameTime - clownWaveStart) * 16f) * cell * 0.7f;
+                      drawClownHand(canvas, x - s * 0.92f - wave, y - s * 0.05f, cell * 0.42f);
+                      drawClownHand(canvas, x + s * 0.92f + wave, y - s * 0.05f, cell * 0.42f);
+                  }
+              }
+          
+              private void drawClownAttack(Canvas canvas, float x, float y, float s, float elapsed) {
+                  boolean active = elapsed >= 0.68f;
+                  int color = active ? 0xDDFF334F : 0x66FFB247;
+                  float left = gx(9) - cell * 0.5f;
+                  float right = gx(15) + cell * 0.5f;
+                  float top = gy(11) - cell * 0.5f;
+                  float bottom = gy(17) + cell * 0.5f;
+                  paint.setColor(color);
+                  switch (clownAttackDir) {
+                      case LEFT: tmpRect.set(left, gy(13) - cell * 0.5f, gx(10) + cell * 0.5f, gy(15) + cell * 0.5f); break;
+                      case RIGHT: tmpRect.set(gx(14) - cell * 0.5f, gy(13) - cell * 0.5f, right, gy(15) + cell * 0.5f); break;
+                      case UP: tmpRect.set(gx(11) - cell * 0.5f, top, gx(13) + cell * 0.5f, gy(12) + cell * 0.5f); break;
+                      case DOWN: tmpRect.set(gx(11) - cell * 0.5f, gy(16) - cell * 0.5f, gx(13) + cell * 0.5f, bottom); break;
+                      default: return;
+                  }
+                  canvas.drawRoundRect(tmpRect, cell * 0.28f, cell * 0.28f, paint);
+                  float hx = tmpRect.centerX();
+                  float hy = tmpRect.centerY();
+                  drawClownHand(canvas, hx, hy, cell * (active ? 0.62f : 0.42f));
+              }
+          
+              private void drawClownHand(Canvas canvas, float x, float y, float r) {
+                  paint.setColor(0xFFFFF0D2);
+                  canvas.drawCircle(x, y, r * 0.65f, paint);
+                  for (int i = -2; i <= 2; i++) {
+                      float a = (float) (-Math.PI / 2 + i * 0.25);
+                      canvas.drawCircle(x + (float) Math.sin(a) * r * 0.55f,
+                              y + (float) Math.cos(a) * r * 0.55f, r * 0.23f, paint);
+                  }
+                  strokePaint.setStrokeWidth(r * 0.17f);
+                  strokePaint.setColor(0xFFB43B76);
+                  canvas.drawCircle(x, y, r * 0.66f, strokePaint);
+              }
+          
+              private void drawActors(Canvas canvas) {
+                  if (player != null && player.alive) {
+                      float alpha = gameTime < invincibleUntil && ((int) (gameTime * 10) & 1) == 0 ? 0.35f : 1f;
+                      paint.setAlpha((int) (255 * alpha));
+                      drawPacShape(canvas, gxFloat(player.x()), gyFloat(player.y()), cell * 0.42f,
+                              player.dir == Dir.NONE ? Dir.RIGHT : player.dir, 0xFFFFD43B);
+                      paint.setAlpha(255);
+                      if (gameTime < shieldUntil) drawShield(canvas, gxFloat(player.x()), gyFloat(player.y()));
+                  }
+                  if (companion != null && companion.alive) drawCompanion(canvas, companion);
+          
+                  int[] colors = {0xFFFF4B5C, 0xFFFF7EB7, 0xFF38D6E8, 0xFFFFA23C};
+                  for (Actor enemy : enemies) {
+                      if (enemy == null || !enemy.alive) continue;
+                      boolean invisible = gameTime >= enemyInvisibleStart && gameTime < enemyInvisibleUntil && !enemy.revealed;
+                      if (invisible) continue;
+                      float x = gxFloat(enemy.x());
+                      float y = gyFloat(enemy.y());
+                      boolean frightened = gameTime < powerUntil;
+                      int color = frightened ? 0xFF345BE8 : colors[enemy.kind];
+                      if (theme == Theme.OCEAN) drawFish(canvas, x, y, cell * 0.78f, color, frightened, enemy.kind);
+                      else if (theme == Theme.SPRING) drawLionGhost(canvas, x, y, cell * 0.43f, color, frightened);
+                      else if (theme == Theme.GALAXY) drawAlienGhost(canvas, x, y, cell * 0.43f, color, frightened);
+                      else drawGhost(canvas, x, y, cell * 0.43f, color, frightened, theme == Theme.CLOWN);
+                      if (gameTime < enemy.stunnedUntil) drawStunStars(canvas, x, y - cell * 0.55f);
+                  }
+              }
+          
+              private void drawCompanion(Canvas canvas, Actor actor) {
+                  float x = gxFloat(actor.x());
+                  float y = gyFloat(actor.y());
+                  paint.setColor(0x4467F0C0);
+                  canvas.drawCircle(x, y, cell * 0.52f, paint);
+                  drawPacShape(canvas, x, y, cell * 0.34f,
+                          actor.dir == Dir.NONE ? Dir.RIGHT : actor.dir, 0xFF67F0C0);
+                  strokePaint.setStrokeWidth(cell * 0.06f);
+                  strokePaint.setColor(0xFFFFFFFF);
+                  canvas.drawOval(x - cell * 0.31f, y - cell * 0.51f,
+                          x + cell * 0.31f, y - cell * 0.32f, strokePaint);
+                  paint.setColor(Color.WHITE);
+                  canvas.drawCircle(x + cell * 0.05f, y - cell * 0.12f, cell * 0.055f, paint);
+              }
+          
+              private void drawTide(Canvas canvas) {
+                  if (tideLevel <= 0.005f) return;
+                  float waterTop = originY + ROWS * cell * (1f - tideLevel);
+                  paint.setShader(new LinearGradient(0, waterTop, 0, mazeBottom,
+                          0x5530C4F2, 0xAA00659C, Shader.TileMode.CLAMP));
+                  canvas.drawRect(originX, waterTop, originX + COLS * cell, mazeBottom, paint);
+                  paint.setShader(null);
+                  path.reset();
+                  path.moveTo(originX, waterTop);
+                  for (int i = 0; i <= 40; i++) {
+                      float x = originX + i * COLS * cell / 40f;
+                      float y = waterTop + (float) Math.sin(i * 0.72f + gameTime * 5f) * cell * 0.23f;
+                      path.lineTo(x, y);
+                  }
+                  strokePaint.setColor(0xCCB8F5FF);
+                  strokePaint.setStrokeWidth(cell * 0.15f);
+                  canvas.drawPath(path, strokePaint);
+                  for (int i = 0; i < 18; i++) {
+                      float bx = originX + ((starX[i] + gameTime * (0.008f + i * 0.0003f)) % 1f) * COLS * cell;
+                      float normalized = (starY[i] + gameTime * (0.035f + (i % 4) * 0.006f)) % 1f;
+                      float by = mazeBottom - normalized * Math.max(cell, mazeBottom - waterTop);
+                      if (by >= waterTop) {
+                          strokePaint.setColor(0x99C9F8FF);
+                          strokePaint.setStrokeWidth(cell * 0.045f);
+                          canvas.drawCircle(bx, by, cell * (0.08f + i % 3 * 0.025f), strokePaint);
+                      }
+                  }
+                  if (player != null && player.alive && isUnderwater(player.x(), player.y())) {
+                      float barW = viewW * 0.36f;
+                      float y = originY + cell * 0.72f;
+                      tmpRect.set(viewW * 0.5f - barW / 2f, y, viewW * 0.5f + barW / 2f, y + cell * 0.42f);
+                      paint.setColor(0xBB071B32);
+                      canvas.drawRoundRect(tmpRect, cell * 0.18f, cell * 0.18f, paint);
+                      tmpRect.right = tmpRect.left + barW * clamp01(breath / 5f);
+                      paint.setColor(breath > 2f ? 0xFF72E6FF : 0xFFFF6B6B);
+                      canvas.drawRoundRect(tmpRect, cell * 0.18f, cell * 0.18f, paint);
+                      drawCenteredText(canvas, "呼吸 " + String.format(Locale.US, "%.1f", breath) + "秒",
+                              viewW * 0.5f, y - cell * 0.10f, cell * 0.31f, Color.WHITE);
+                  }
+              }
+          
+              private void drawHud(Canvas canvas) {
+                  paint.setColor(0xB20A0920);
+                  canvas.drawRect(0, 0, viewW, Math.max(originY, viewH * 0.052f), paint);
+                  float size = viewW * 0.030f;
+                  drawLeftText(canvas, "分数 " + score, viewW * 0.025f, viewH * 0.036f, size, Color.WHITE);
+                  drawLeftText(canvas, "豆 " + pelletsRemaining, viewW * 0.29f, viewH * 0.036f, size, 0xFFFFD66B);
+                  drawLeftText(canvas, "命 " + Math.max(0, lives), viewW * 0.49f, viewH * 0.036f, size, 0xFFFF839C);
+                  if (gameTime < heartUntil) {
+                      drawHeart(canvas, viewW * 0.68f, viewH * 0.027f, viewW * 0.018f, 0xFFFF4D7E);
+                      drawLeftText(canvas, String.valueOf((int) Math.ceil(heartUntil - gameTime)),
+                              viewW * 0.705f, viewH * 0.036f, size * 0.82f, Color.WHITE);
+                  } else if (companion != null && companion.alive) {
+                      drawLeftText(canvas, companionOnly ? "AI接管" : "AI同行", viewW * 0.66f,
+                              viewH * 0.036f, size * 0.82f, 0xFF67F0C0);
+                  }
+                  paint.setColor(0x553C3A6B);
+                  canvas.drawRoundRect(pauseButton, viewW * 0.015f, viewW * 0.015f, paint);
+                  strokePaint.setColor(Color.WHITE);
+                  strokePaint.setStrokeWidth(viewW * 0.008f);
+                  float pcx = pauseButton.centerX();
+                  canvas.drawLine(pcx - viewW * 0.011f, pauseButton.top + viewH * 0.011f,
+                          pcx - viewW * 0.011f, pauseButton.bottom - viewH * 0.011f, strokePaint);
+                  canvas.drawLine(pcx + viewW * 0.011f, pauseButton.top + viewH * 0.011f,
+                          pcx + viewW * 0.011f, pauseButton.bottom - viewH * 0.011f, strokePaint);
+              }
+          
+              private void drawControls(Canvas canvas) {
+                  paint.setShader(new LinearGradient(0, controlTop, 0, viewH,
+                          0xFF17152D, 0xFF090914, Shader.TileMode.CLAMP));
+                  canvas.drawRect(0, controlTop, viewW, viewH, paint);
+                  paint.setShader(null);
+                  paint.setColor(0xFF24213F);
+                  canvas.drawRoundRect(toggleButton, viewW * 0.025f, viewW * 0.025f, paint);
+                  drawCenteredText(canvas, dpadMode ? "切换摇杆" : "切换方向键", toggleButton.centerX(),
+                          toggleButton.centerY() + viewW * 0.009f, viewW * 0.025f, 0xFFD6D8F2);
+          
+                  if (dpadMode) drawDpad(canvas);
+                  else drawJoystick(canvas);
+          
+                  float bx = bombButton.centerX();
+                  float by = bombButton.centerY();
+                  float br = bombButton.width() / 2f;
+                  paint.setColor(bombCount > 0 && !companionOnly ? 0xFF493C64 : 0xFF292735);
+                  canvas.drawCircle(bx, by, br, paint);
+                  strokePaint.setColor(bombCount > 0 ? 0xFFFFC857 : 0xFF5D5970);
+                  strokePaint.setStrokeWidth(viewW * 0.007f);
+                  canvas.drawCircle(bx, by, br, strokePaint);
+                  paint.setColor(0xFF171722);
+                  canvas.drawCircle(bx, by - br * 0.08f, br * 0.36f, paint);
+                  strokePaint.setColor(0xFFFFD45B);
+                  strokePaint.setStrokeWidth(br * 0.11f);
+                  path.reset();
+                  path.moveTo(bx + br * 0.20f, by - br * 0.35f);
+                  path.quadTo(bx + br * 0.42f, by - br * 0.58f, bx + br * 0.53f, by - br * 0.36f);
+                  canvas.drawPath(path, strokePaint);
+                  drawCenteredText(canvas, "炸弹 ×" + bombCount, bx, by + br * 0.73f, viewW * 0.027f,
+                          bombCount > 0 ? Color.WHITE : 0xFF777486);
+                  if (companionOnly) {
+                      drawCenteredText(canvas, "小跟班正在自主挑战", viewW * 0.5f,
+                              controlTop + (viewH - controlTop) * 0.92f, viewW * 0.032f, 0xFF67F0C0);
+                  }
+              }
+          
+              private void drawJoystick(Canvas canvas) {
+                  paint.setColor(0x663B3A58);
+                  canvas.drawCircle(joystickCx, joystickCy, joystickRadius, paint);
+                  strokePaint.setColor(0x886B6B92);
+                  strokePaint.setStrokeWidth(viewW * 0.006f);
+                  canvas.drawCircle(joystickCx, joystickCy, joystickRadius, strokePaint);
+                  paint.setColor(0xFF67618C);
+                  canvas.drawCircle(joystickKnobX, joystickKnobY, joystickRadius * 0.43f, paint);
+                  drawDirectionMarks(canvas, joystickCx, joystickCy, joystickRadius * 0.78f);
+              }
+          
+              private void drawDpad(Canvas canvas) {
+                  float unit = joystickRadius * 0.62f;
+                  float cx = joystickCx;
+                  float cy = joystickCy;
+                  paint.setColor(0xFF3A3754);
+                  tmpRect.set(cx - unit * 0.48f, cy - unit * 1.45f, cx + unit * 0.48f, cy + unit * 1.45f);
+                  canvas.drawRoundRect(tmpRect, unit * 0.23f, unit * 0.23f, paint);
+                  tmpRect.set(cx - unit * 1.45f, cy - unit * 0.48f, cx + unit * 1.45f, cy + unit * 0.48f);
+                  canvas.drawRoundRect(tmpRect, unit * 0.23f, unit * 0.23f, paint);
+                  drawDirectionMarks(canvas, cx, cy, unit * 1.05f);
+              }
+          
+              private void drawDirectionMarks(Canvas canvas, float cx, float cy, float r) {
+                  paint.setColor(0xFFD3D3E5);
+                  drawTriangle(canvas, cx, cy - r, viewW * 0.018f, Dir.UP);
+                  drawTriangle(canvas, cx, cy + r, viewW * 0.018f, Dir.DOWN);
+                  drawTriangle(canvas, cx - r, cy, viewW * 0.018f, Dir.LEFT);
+                  drawTriangle(canvas, cx + r, cy, viewW * 0.018f, Dir.RIGHT);
+              }
+          
+              private void drawBanner(Canvas canvas) {
+                  if (gameTime >= bannerUntil || banner == null || banner.isEmpty()) return;
+                  float alpha = Math.min(1f, (bannerUntil - gameTime) * 2f);
+                  textPaint.setTextSize(viewW * 0.031f);
+                  float width = Math.min(viewW * 0.88f, textPaint.measureText(banner) + viewW * 0.11f);
+                  tmpRect.set((viewW - width) / 2f, originY + cell * 0.35f,
+                          (viewW + width) / 2f, originY + cell * 1.65f);
+                  paint.setColor(Color.argb((int) (205 * alpha), 12, 10, 31));
+                  canvas.drawRoundRect(tmpRect, cell * 0.42f, cell * 0.42f, paint);
+                  drawCenteredText(canvas, banner, viewW * 0.5f,
+                          tmpRect.centerY() + viewW * 0.012f, viewW * 0.031f,
+                          Color.argb((int) (255 * alpha), 255, 255, 255));
+              }
+          
+              private void drawReviveCountdown(Canvas canvas) {
+                  paint.setColor(0x99100E28);
+                  canvas.drawCircle(viewW * 0.5f, (mazeTop + mazeBottom) * 0.5f, viewW * 0.15f, paint);
+                  drawCenteredText(canvas, String.valueOf((int) Math.ceil(reviveAt - gameTime)), viewW * 0.5f,
+                          (mazeTop + mazeBottom) * 0.5f + viewW * 0.045f, viewW * 0.13f, Color.WHITE);
+                  drawCenteredText(canvas, heartRevive ? "爱心复活" : "重新出发", viewW * 0.5f,
+                          (mazeTop + mazeBottom) * 0.5f + viewW * 0.10f, viewW * 0.028f, 0xFFFF91A6);
+              }
+          
+              private void drawGameOverlay(Canvas canvas) {
+                  paint.setColor(0xD20A0918);
+                  canvas.drawRect(0, 0, viewW, viewH, paint);
+                  String title;
+                  String first;
+                  if (screen == Screen.PAUSED) {
+                      title = "已暂停";
+                      first = "继续游戏";
+                  } else if (screen == Screen.WIN) {
+                      title = companionOnly ? "小跟班完成通关！" : "迷宫通关！";
+                      first = "生成新迷宫";
+                  } else {
+                      title = companionOnly ? "小跟班也被抓到了" : "挑战结束";
+                      first = "再来一局";
+                  }
+                  drawCenteredText(canvas, title, viewW * 0.5f, viewH * 0.34f,
+                          viewW * 0.085f, screen == Screen.WIN ? 0xFFFFD45B : Color.WHITE);
+                  if (screen != Screen.PAUSED) {
+                      drawCenteredText(canvas, "本局分数 " + score + "   最高分 " + bestScore,
+                              viewW * 0.5f, viewH * 0.41f, viewW * 0.034f, 0xFFD0D4F2);
+                  }
+                  drawRoundedButton(canvas, resumeButton, first, theme.accent, 0xFF171128);
+                  drawRoundedButton(canvas, exitButton, "返回地图选择", 0x334D4A6B, Color.WHITE);
+              }
+          
+              private void drawPacShape(Canvas canvas, float x, float y, float r, Dir dir, int color) {
+                  float mouth = 19f + 12f * Math.abs((float) Math.sin(gameTime * 8f));
+                  float base;
+                  switch (dir) {
+                      case LEFT: base = 180f; break;
+                      case UP: base = 270f; break;
+                      case DOWN: base = 90f; break;
+                      default: base = 0f; break;
+                  }
+                  paint.setColor(color);
+                  tmpRect.set(x - r, y - r, x + r, y + r);
+                  canvas.drawArc(tmpRect, base + mouth, 360f - mouth * 2f, true, paint);
+                  float eyeX = x + (dir == Dir.LEFT ? -0.18f : dir == Dir.RIGHT ? 0.18f : 0.14f) * r;
+                  float eyeY = y + (dir == Dir.DOWN ? 0.18f : -0.38f) * r;
+                  paint.setColor(0xFF26202D);
+                  canvas.drawCircle(eyeX, eyeY, r * 0.095f, paint);
+              }
+          
+              private void drawGhost(Canvas canvas, float x, float y, float r, int color,
+                                     boolean frightened, boolean clownStyle) {
+                  paint.setColor(color);
+                  tmpRect.set(x - r, y - r, x + r, y + r * 0.62f);
+                  canvas.drawArc(tmpRect, 180f, 180f, true, paint);
+                  canvas.drawRect(x - r, y, x + r, y + r * 0.66f, paint);
+                  path.reset();
+                  path.moveTo(x - r, y + r * 0.62f);
+                  for (int i = 0; i <= 4; i++) {
+                      float px = x - r + i * r * 0.5f;
+                      float py = y + r * (i % 2 == 0 ? 0.93f : 0.62f);
+                      path.lineTo(px, py);
+                  }
+                  path.lineTo(x + r, y);
+                  path.close();
+                  canvas.drawPath(path, paint);
+                  if (frightened) {
+                      paint.setColor(Color.WHITE);
+                      canvas.drawCircle(x - r * 0.32f, y - r * 0.05f, r * 0.10f, paint);
+                      canvas.drawCircle(x + r * 0.32f, y - r * 0.05f, r * 0.10f, paint);
+                      strokePaint.setColor(Color.WHITE);
+                      strokePaint.setStrokeWidth(r * 0.10f);
+                      canvas.drawLine(x - r * 0.36f, y + r * 0.36f, x - r * 0.12f, y + r * 0.22f, strokePaint);
+                      canvas.drawLine(x - r * 0.12f, y + r * 0.22f, x + r * 0.12f, y + r * 0.36f, strokePaint);
+                      canvas.drawLine(x + r * 0.12f, y + r * 0.36f, x + r * 0.36f, y + r * 0.22f, strokePaint);
+                      return;
+                  }
+                  paint.setColor(Color.WHITE);
+                  canvas.drawOval(x - r * 0.58f, y - r * 0.40f, x - r * 0.10f, y + r * 0.12f, paint);
+                  canvas.drawOval(x + r * 0.10f, y - r * 0.40f, x + r * 0.58f, y + r * 0.12f, paint);
+                  paint.setColor(0xFF24336B);
+                  canvas.drawCircle(x - r * 0.28f, y - r * 0.10f, r * 0.13f, paint);
+                  canvas.drawCircle(x + r * 0.40f, y - r * 0.10f, r * 0.13f, paint);
+                  if (clownStyle) {
+                      paint.setColor(0xFFFFE044);
+                      canvas.drawCircle(x, y + r * 0.22f, r * 0.16f, paint);
+                      path.reset();
+                      path.moveTo(x - r * 0.55f, y - r * 0.62f);
+                      path.lineTo(x, y - r * 1.12f);
+                      path.lineTo(x + r * 0.55f, y - r * 0.62f);
+                      path.close();
+                      paint.setColor(0xFF56E0BF);
+                      canvas.drawPath(path, paint);
+                  }
+              }
+          
+              private void drawFish(Canvas canvas, float x, float y, float size, int color,
+                                    boolean frightened, int kind) {
+                  float r = size * 0.52f;
+                  paint.setColor(color);
+                  canvas.drawOval(x - r, y - r * 0.58f, x + r, y + r * 0.58f, paint);
+                  path.reset();
+                  path.moveTo(x - r * 0.82f, y);
+                  path.lineTo(x - r * 1.55f, y - r * 0.72f);
+                  path.lineTo(x - r * 1.55f, y + r * 0.72f);
+                  path.close();
+                  canvas.drawPath(path, paint);
+                  path.reset();
+                  path.moveTo(x, y - r * 0.42f);
+                  path.lineTo(x - r * 0.24f, y - r * 0.93f);
+                  path.lineTo(x + r * 0.34f, y - r * 0.48f);
+                  path.close();
+                  canvas.drawPath(path, paint);
+                  paint.setColor(Color.WHITE);
+                  canvas.drawCircle(x + r * 0.52f, y - r * 0.16f, r * 0.17f, paint);
+                  paint.setColor(frightened ? 0xFFFFE064 : 0xFF142B4D);
+                  canvas.drawCircle(x + r * 0.58f, y - r * 0.16f, r * 0.075f, paint);
+                  strokePaint.setStrokeWidth(r * 0.10f);
+                  strokePaint.setColor(0xAAFFFFFF);
+                  for (int i = -1; i <= 1; i++) {
+                      float sx = x + i * r * 0.35f - r * 0.15f;
+                      canvas.drawLine(sx, y - r * 0.44f, sx - r * 0.15f, y + r * 0.44f, strokePaint);
+                  }
+                  if (kind == 0 && !frightened) {
+                      paint.setColor(0xFFFFFFFF);
+                      path.reset();
+                      path.moveTo(x + r * 0.85f, y + r * 0.10f);
+                      path.lineTo(x + r * 0.55f, y + r * 0.24f);
+                      path.lineTo(x + r * 0.82f, y + r * 0.33f);
+                      path.close();
+                      canvas.drawPath(path, paint);
+                  }
+              }
+          
+              private void drawLionGhost(Canvas canvas, float x, float y, float r, int color, boolean frightened) {
+                  paint.setColor(frightened ? 0xFF385EDC : color);
+                  for (int i = 0; i < 8; i++) {
+                      double a = i * Math.PI / 4;
+                      canvas.drawCircle(x + (float) Math.cos(a) * r * 0.65f,
+                              y + (float) Math.sin(a) * r * 0.65f, r * 0.35f, paint);
+                  }
+                  paint.setColor(0xFFFFD66B);
+                  canvas.drawCircle(x, y, r * 0.72f, paint);
+                  paint.setColor(Color.WHITE);
+                  canvas.drawCircle(x - r * 0.27f, y - r * 0.13f, r * 0.20f, paint);
+                  canvas.drawCircle(x + r * 0.27f, y - r * 0.13f, r * 0.20f, paint);
+                  paint.setColor(0xFF22202C);
+                  canvas.drawCircle(x - r * 0.24f, y - r * 0.10f, r * 0.08f, paint);
+                  canvas.drawCircle(x + r * 0.30f, y - r * 0.10f, r * 0.08f, paint);
+                  paint.setColor(0xFFFF4D51);
+                  canvas.drawCircle(x, y + r * 0.20f, r * 0.16f, paint);
+                  strokePaint.setColor(0xFF702A27);
+                  strokePaint.setStrokeWidth(r * 0.09f);
+                  canvas.drawLine(x - r * 0.28f, y + r * 0.42f, x + r * 0.28f, y + r * 0.42f, strokePaint);
+              }
+          
+              private void drawAlienGhost(Canvas canvas, float x, float y, float r, int color, boolean frightened) {
+                  paint.setShader(new RadialGradient(x - r * 0.2f, y - r * 0.25f, r * 1.2f,
+                          frightened ? 0xFF5E78FF : mixColor(color, Color.WHITE, 0.35f),
+                          frightened ? 0xFF2639A9 : color, Shader.TileMode.CLAMP));
+                  canvas.drawOval(x - r, y - r * 0.78f, x + r, y + r * 0.86f, paint);
+                  paint.setShader(null);
+                  paint.setColor(0xFF08112D);
+                  canvas.drawOval(x - r * 0.52f, y - r * 0.28f, x - r * 0.08f, y + r * 0.12f, paint);
+                  canvas.drawOval(x + r * 0.08f, y - r * 0.28f, x + r * 0.52f, y + r * 0.12f, paint);
+                  strokePaint.setColor(0xAAE1D8FF);
+                  strokePaint.setStrokeWidth(r * 0.08f);
+                  canvas.drawCircle(x, y, r * 1.05f, strokePaint);
+                  canvas.drawCircle(x, y, r * 1.25f + (float) Math.sin(gameTime * 5f) * r * 0.08f, strokePaint);
+              }
+          
+              private void drawStunStars(Canvas canvas, float x, float y) {
+                  for (int i = 0; i < 3; i++) {
+                      double a = gameTime * 4.5 + i * Math.PI * 2 / 3;
+                      drawStar(canvas, x + (float) Math.cos(a) * cell * 0.36f,
+                              y + (float) Math.sin(a) * cell * 0.13f,
+                              cell * 0.10f, 0xFFFFE15C);
+                  }
+              }
+          
+              private void drawStar(Canvas canvas, float x, float y, float r, int color) {
+                  paint.setColor(color);
+                  path.reset();
+                  for (int i = 0; i < 10; i++) {
+                      double a = -Math.PI / 2 + i * Math.PI / 5;
+                      float rr = (i & 1) == 0 ? r : r * 0.43f;
+                      float px = x + (float) Math.cos(a) * rr;
+                      float py = y + (float) Math.sin(a) * rr;
+                      if (i == 0) path.moveTo(px, py); else path.lineTo(px, py);
+                  }
+                  path.close();
+                  canvas.drawPath(path, paint);
+              }
+          
+              private void drawPlanet(Canvas canvas, float x, float y, float r, int color) {
+                  strokePaint.setColor(mixColor(color, Color.WHITE, 0.35f));
+                  strokePaint.setStrokeWidth(Math.max(1f, r * 0.22f));
+                  tmpRect.set(x - r * 1.35f, y - r * 0.48f, x + r * 1.35f, y + r * 0.48f);
+                  canvas.save();
+                  canvas.rotate(-18f, x, y);
+                  canvas.drawOval(tmpRect, strokePaint);
+                  canvas.restore();
+                  paint.setColor(color);
+                  canvas.drawCircle(x, y, r, paint);
+                  paint.setColor(0x55FFFFFF);
+                  canvas.drawCircle(x - r * 0.28f, y - r * 0.30f, r * 0.27f, paint);
+              }
+          
+              private void drawShell(Canvas canvas, float x, float y, float r, boolean power) {
+                  paint.setColor(power ? 0xFFFFE8BE : 0xFFFFB4B4);
+                  tmpRect.set(x - r, y - r * 0.75f, x + r, y + r * 0.90f);
+                  canvas.drawArc(tmpRect, 180f, 180f, true, paint);
+                  canvas.drawRect(x - r, y, x + r, y + r * 0.55f, paint);
+                  strokePaint.setColor(power ? 0xFFFF9D70 : 0xFFC66F86);
+                  strokePaint.setStrokeWidth(Math.max(1f, r * 0.10f));
+                  for (int i = -2; i <= 2; i++) {
+                      canvas.drawLine(x, y + r * 0.45f, x + i * r * 0.40f, y - r * 0.48f, strokePaint);
+                  }
+              }
+          
+              private void drawFirecracker(Canvas canvas, float x, float y, float r, boolean power) {
+                  canvas.save();
+                  canvas.rotate(-18f, x, y);
+                  paint.setColor(0xFFD91E36);
+                  tmpRect.set(x - r * 0.48f, y - r, x + r * 0.48f, y + r);
+                  canvas.drawRoundRect(tmpRect, r * 0.18f, r * 0.18f, paint);
+                  paint.setColor(0xFFFFD05C);
+                  canvas.drawRect(x - r * 0.52f, y - r, x + r * 0.52f, y - r * 0.69f, paint);
+                  canvas.drawRect(x - r * 0.52f, y + r * 0.69f, x + r * 0.52f, y + r, paint);
+                  if (power) {
+                      strokePaint.setColor(0xFFFFD65A);
+                      strokePaint.setStrokeWidth(Math.max(1f, r * 0.16f));
+                      path.reset();
+                      path.moveTo(x, y - r);
+                      path.quadTo(x + r * 0.52f, y - r * 1.38f, x + r * 0.75f, y - r * 1.10f);
+                      canvas.drawPath(path, strokePaint);
+                  }
+                  canvas.restore();
+              }
+          
+              private void drawHeart(Canvas canvas, float x, float y, float r, int color) {
+                  paint.setColor(color);
+                  path.reset();
+                  path.moveTo(x, y + r * 0.95f);
+                  path.cubicTo(x - r * 1.35f, y + r * 0.10f, x - r * 0.95f, y - r * 0.85f, x, y - r * 0.30f);
+                  path.cubicTo(x + r * 0.95f, y - r * 0.85f, x + r * 1.35f, y + r * 0.10f, x, y + r * 0.95f);
+                  canvas.drawPath(path, paint);
+              }
+          
+              private void drawGift(Canvas canvas, float x, float y, float r) {
+                  paint.setColor(0xFFFF4E87);
+                  tmpRect.set(x - r, y - r * 0.72f, x + r, y + r);
+                  canvas.drawRoundRect(tmpRect, r * 0.18f, r * 0.18f, paint);
+                  paint.setColor(0xFFFFD45D);
+                  canvas.drawRect(x - r * 0.13f, y - r * 0.72f, x + r * 0.13f, y + r, paint);
+                  canvas.drawRect(x - r, y - r * 0.22f, x + r, y + r * 0.06f, paint);
+                  strokePaint.setColor(0xFFFFD45D);
+                  strokePaint.setStrokeWidth(r * 0.20f);
+                  canvas.drawOval(x - r * 0.65f, y - r * 1.12f, x, y - r * 0.42f, strokePaint);
+                  canvas.drawOval(x, y - r * 1.12f, x + r * 0.65f, y - r * 0.42f, strokePaint);
+              }
+          
+              private void drawWormhole(Canvas canvas, float x, float y, float r) {
+                  for (int i = 4; i >= 0; i--) {
+                      float p = i / 4f;
+                      strokePaint.setStrokeWidth(Math.max(1f, r * (0.12f + p * 0.05f)));
+                      strokePaint.setColor(Color.argb(210 - i * 25, 100 + i * 28, 100, 255));
+                      tmpRect.set(x - r * (1f - p * 0.14f), y - r * (0.45f + p * 0.08f),
+                              x + r * (1f - p * 0.14f), y + r * (0.45f + p * 0.08f));
+                      canvas.save();
+                      canvas.rotate(gameTime * 90f + i * 18f, x, y);
+                      canvas.drawOval(tmpRect, strokePaint);
+                      canvas.restore();
+                  }
+                  paint.setColor(0xFF05010D);
+                  canvas.drawCircle(x, y, r * 0.33f, paint);
+              }
+          
+              private void drawShield(Canvas canvas, float x, float y) {
+                  float r = cell * 0.57f;
+                  paint.setColor(0x334DE7FF);
+                  canvas.drawCircle(x, y, r, paint);
+                  strokePaint.setColor(0xCC80EDFF);
+                  strokePaint.setStrokeWidth(cell * 0.075f);
+                  canvas.drawCircle(x, y, r, strokePaint);
+              }
+          
+              private void drawBalloon(Canvas canvas, float x, float y, float r, int color) {
+                  paint.setColor(color);
+                  canvas.drawOval(x - r * 0.75f, y - r, x + r * 0.75f, y + r, paint);
+                  path.reset();
+                  path.moveTo(x - r * 0.16f, y + r);
+                  path.lineTo(x + r * 0.16f, y + r);
+                  path.lineTo(x, y + r * 1.25f);
+                  path.close();
+                  canvas.drawPath(path, paint);
+                  strokePaint.setColor(0x99FFFFFF);
+                  strokePaint.setStrokeWidth(Math.max(1f, r * 0.06f));
+                  path.reset();
+                  path.moveTo(x, y + r * 1.25f);
+                  path.quadTo(x + r * 0.42f, y + r * 1.75f, x, y + r * 2.15f);
+                  canvas.drawPath(path, strokePaint);
+              }
+          
+              private void drawFireworks(Canvas canvas) {
+                  float[][] centers = {{0.18f, 0.16f}, {0.78f, 0.22f}, {0.58f, 0.09f}};
+                  int[] colors = {0x55FFD65A, 0x55FF6B88, 0x5580E8FF};
+                  for (int k = 0; k < centers.length; k++) {
+                      float cx = viewW * centers[k][0];
+                      float cy = mazeTop + (mazeBottom - mazeTop) * centers[k][1];
+                      float radius = cell * (1.1f + 0.25f * (float) Math.sin(gameTime * 2f + k));
+                      strokePaint.setColor(colors[k]);
+                      strokePaint.setStrokeWidth(cell * 0.055f);
+                      for (int i = 0; i < 10; i++) {
+                          double a = i * Math.PI / 5 + k;
+                          canvas.drawLine(cx + (float) Math.cos(a) * radius * 0.35f,
+                                  cy + (float) Math.sin(a) * radius * 0.35f,
+                                  cx + (float) Math.cos(a) * radius,
+                                  cy + (float) Math.sin(a) * radius, strokePaint);
+                      }
+                  }
+              }
+          
+              private void drawMiniClown(Canvas canvas, float x, float y, float r) {
+                  paint.setColor(0xFFFFF0D5);
+                  canvas.drawCircle(x, y, r, paint);
+                  paint.setColor(0xFFFF5A78);
+                  canvas.drawCircle(x - r * 0.80f, y - r * 0.25f, r * 0.42f, paint);
+                  canvas.drawCircle(x + r * 0.80f, y - r * 0.25f, r * 0.42f, paint);
+                  paint.setColor(0xFFFF3D4F);
+                  canvas.drawCircle(x, y + r * 0.08f, r * 0.24f, paint);
+                  paint.setColor(0xFF21223C);
+                  canvas.drawCircle(x - r * 0.33f, y - r * 0.20f, r * 0.10f, paint);
+                  canvas.drawCircle(x + r * 0.33f, y - r * 0.20f, r * 0.10f, paint);
+                  paint.setColor(0xFF53D8B5);
+                  path.reset();
+                  path.moveTo(x - r * 0.55f, y - r * 0.67f);
+                  path.lineTo(x, y - r * 1.35f);
+                  path.lineTo(x + r * 0.55f, y - r * 0.67f);
+                  path.close();
+                  canvas.drawPath(path, paint);
+              }
+          
+              private void drawTriangle(Canvas canvas, float x, float y, float r, Dir dir) {
+                  path.reset();
+                  if (dir == Dir.UP || dir == Dir.DOWN) {
+                      float sign = dir == Dir.UP ? -1f : 1f;
+                      path.moveTo(x, y + sign * r);
+                      path.lineTo(x - r, y - sign * r * 0.7f);
+                      path.lineTo(x + r, y - sign * r * 0.7f);
+                  } else {
+                      float sign = dir == Dir.LEFT ? -1f : 1f;
+                      path.moveTo(x + sign * r, y);
+                      path.lineTo(x - sign * r * 0.7f, y - r);
+                      path.lineTo(x - sign * r * 0.7f, y + r);
+                  }
+                  path.close();
+                  canvas.drawPath(path, paint);
+              }
+          
+              private void drawRoundedButton(Canvas canvas, RectF rect, String text, int bg, int fg) {
+                  paint.setColor(bg);
+                  canvas.drawRoundRect(rect, rect.height() * 0.36f, rect.height() * 0.36f, paint);
+                  drawCenteredText(canvas, text, rect.centerX(), rect.centerY() + rect.height() * 0.12f,
+                          Math.min(viewW * 0.041f, rect.height() * 0.43f), fg);
+              }
+          
+              private void drawBackButton(Canvas canvas, String label) {
+                  paint.setColor(0x443F3D61);
+                  canvas.drawRoundRect(backButton, viewW * 0.018f, viewW * 0.018f, paint);
+                  drawCenteredText(canvas, "‹  " + label, backButton.centerX(),
+                          backButton.centerY() + viewW * 0.009f, viewW * 0.029f, Color.WHITE);
+              }
+          
+              private void drawCenteredText(Canvas canvas, String text, float x, float baseline,
+                                            float size, int color) {
+                  textPaint.setTextAlign(Paint.Align.CENTER);
+                  textPaint.setTextSize(size);
+                  textPaint.setColor(color);
+                  canvas.drawText(text, x, baseline, textPaint);
+              }
+          
+              private void drawLeftText(Canvas canvas, String text, float x, float baseline,
+                                        float size, int color) {
+                  textPaint.setTextAlign(Paint.Align.LEFT);
+                  textPaint.setTextSize(size);
+                  float maxWidth = viewW - x - viewW * 0.05f;
+                  float measured = textPaint.measureText(text);
+                  if (measured > maxWidth && measured > 0f) textPaint.setTextSize(size * maxWidth / measured);
+                  textPaint.setColor(color);
+                  canvas.drawText(text, x, baseline, textPaint);
+              }
+          
+              @Override
+              public boolean onTouchEvent(MotionEvent event) {
+                  int action = event.getActionMasked();
+                  int actionIndex = event.getActionIndex();
+                  if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+                      handleTouchDown(event.getX(actionIndex), event.getY(actionIndex),
+                              event.getPointerId(actionIndex));
+                  } else if (action == MotionEvent.ACTION_MOVE) {
+                      if (joystickPointer >= 0 && !dpadMode) {
+                          int index = event.findPointerIndex(joystickPointer);
+                          if (index >= 0) updateJoystickInput(event.getX(index), event.getY(index));
+                      }
+                  } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP
+                          || action == MotionEvent.ACTION_CANCEL) {
+                      int pointer = action == MotionEvent.ACTION_CANCEL ? joystickPointer : event.getPointerId(actionIndex);
+                      if (pointer == joystickPointer) {
+                          joystickPointer = -1;
+                          joystickKnobX = joystickCx;
+                          joystickKnobY = joystickCy;
+                          invalidate();
+                      }
+                  }
+                  return true;
+              }
+          
+              private void handleTouchDown(float x, float y, int pointerId) {
+                  switch (screen) {
+                      case HOME:
+                          if (startButton.contains(x, y)) {
+                              screen = Screen.MAP_SELECT;
+                              playTone(ToneGenerator.TONE_PROP_BEEP2, 65);
+                              invalidate();
+                          } else if (guideButton.contains(x, y)) {
+                              screenBeforeGuide = Screen.HOME;
+                              screen = Screen.GUIDE;
+                              invalidate();
+                          }
+                          return;
+                      case MAP_SELECT:
+                          if (backButton.contains(x, y)) {
+                              screen = Screen.HOME;
+                              invalidate();
+                              return;
+                          }
+                          for (int i = 0; i < mapCards.length; i++) {
+                              if (mapCards[i].contains(x, y)) {
+                                  startGame(Theme.values()[i]);
+                                  return;
+                              }
+                          }
+                          return;
+                      case GUIDE:
+                          if (backButton.contains(x, y)) {
+                              screen = screenBeforeGuide;
+                              invalidate();
+                          }
+                          return;
+                      case PAUSED:
+                          if (resumeButton.contains(x, y)) {
+                              screen = Screen.PLAYING;
+                              lastFrameNanos = 0L;
+                              invalidate();
+                          } else if (exitButton.contains(x, y)) {
+                              screen = Screen.MAP_SELECT;
+                              invalidate();
+                          }
+                          return;
+                      case GAME_OVER:
+                      case WIN:
+                          if (resumeButton.contains(x, y)) startGame(theme);
+                          else if (exitButton.contains(x, y)) {
+                              screen = Screen.MAP_SELECT;
+                              invalidate();
+                          }
+                          return;
+                      case PLAYING:
+                          break;
+                  }
+          
+                  if (pauseButton.contains(x, y)) {
+                      screen = Screen.PAUSED;
+                      joystickPointer = -1;
+                      joystickKnobX = joystickCx;
+                      joystickKnobY = joystickCy;
+                      invalidate();
+                      return;
+                  }
+                  if (toggleButton.contains(x, y)) {
+                      dpadMode = !dpadMode;
+                      prefs.edit().putBoolean("方向键模式", dpadMode).apply();
+                      joystickPointer = -1;
+                      joystickKnobX = joystickCx;
+                      joystickKnobY = joystickCy;
+                      playTone(ToneGenerator.TONE_PROP_BEEP, 45);
+                      invalidate();
+                      return;
+                  }
+                  if (bombButton.contains(x, y)) {
+                      dropNormalBomb();
+                      invalidate();
+                      return;
+                  }
+                  if (companionOnly || player == null || !player.alive || y < controlTop) return;
+                  if (dpadMode) {
+                      updateDpadInput(x, y);
+                  } else if (distance(x, y, joystickCx, joystickCy) <= joystickRadius * 1.45f) {
+                      joystickPointer = pointerId;
+                      updateJoystickInput(x, y);
+                  }
+              }
+          
+              private void updateJoystickInput(float x, float y) {
+                  float dx = x - joystickCx;
+                  float dy = y - joystickCy;
+                  float len = (float) Math.sqrt(dx * dx + dy * dy);
+                  if (len > joystickRadius) {
+                      dx = dx / len * joystickRadius;
+                      dy = dy / len * joystickRadius;
+                      len = joystickRadius;
+                  }
+                  joystickKnobX = joystickCx + dx;
+                  joystickKnobY = joystickCy + dy;
+                  if (len > joystickRadius * 0.22f && player != null) {
+                      player.wanted = Math.abs(dx) > Math.abs(dy)
+                              ? (dx < 0 ? Dir.LEFT : Dir.RIGHT)
+                              : (dy < 0 ? Dir.UP : Dir.DOWN);
+                  }
+                  invalidate();
+              }
+          
+              private void updateDpadInput(float x, float y) {
+                  float dx = x - joystickCx;
+                  float dy = y - joystickCy;
+                  if (distance(x, y, joystickCx, joystickCy) > joystickRadius * 1.55f || player == null) return;
+                  if (Math.abs(dx) > Math.abs(dy)) player.wanted = dx < 0 ? Dir.LEFT : Dir.RIGHT;
+                  else player.wanted = dy < 0 ? Dir.UP : Dir.DOWN;
+                  performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                  invalidate();
+              }
+          
+              public boolean handleBack() {
+                  switch (screen) {
+                      case PLAYING:
+                          screen = Screen.PAUSED;
+                          invalidate();
+                          return true;
+                      case PAUSED:
+                          screen = Screen.PLAYING;
+                          lastFrameNanos = 0L;
+                          invalidate();
+                          return true;
+                      case MAP_SELECT:
+                      case GUIDE:
+                          screen = Screen.HOME;
+                          invalidate();
+                          return true;
+                      case GAME_OVER:
+                      case WIN:
+                          screen = Screen.MAP_SELECT;
+                          invalidate();
+                          return true;
+                      default:
+                          return false;
+                  }
+              }
+          
+              public void pauseFromSystem() {
+                  systemPaused = true;
+                  if (screen == Screen.PLAYING) screen = Screen.PAUSED;
+                  lastFrameNanos = 0L;
+              }
+          
+              public void resumeFromSystem() {
+                  systemPaused = false;
+                  lastFrameNanos = 0L;
+                  invalidate();
+              }
+          
+              @Override
+              protected void onDetachedFromWindow() {
+                  tone.release();
+                  if (wallCache != null) {
+                      wallCache.recycle();
+                      wallCache = null;
+                  }
+                  super.onDetachedFromWindow();
+              }
+          
+              private void playTone(int toneType, int durationMs) {
+                  try {
+                      tone.startTone(toneType, durationMs);
+                  } catch (RuntimeException ignored) {
+                      // 某些静音或受限设备会拒绝创建音调，不影响游戏。
+                  }
+              }
+          
+              private void vibrate(long millis) {
+                  try {
+                      Vibrator vibrator = (Vibrator) getContext().getSystemService(Context.VIBRATOR_SERVICE);
+                      if (vibrator == null || !vibrator.hasVibrator()) return;
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          vibrator.vibrate(VibrationEffect.createOneShot(millis, VibrationEffect.DEFAULT_AMPLITUDE));
+                      } else {
+                          vibrator.vibrate(millis);
+                      }
+                  } catch (SecurityException ignored) {
+                      // 没有振动权限时静默降级。
+                  }
+              }
+          
+              private float gx(int gridX) { return originX + (gridX + 0.5f) * cell; }
+              private float gy(int gridY) { return originY + (gridY + 0.5f) * cell; }
+              private float gxFloat(float gridX) { return originX + (gridX + 0.5f) * cell; }
+              private float gyFloat(float gridY) { return originY + (gridY + 0.5f) * cell; }
+          
+              private static float distance(float x1, float y1, float x2, float y2) {
+                  float dx = x1 - x2;
+                  float dy = y1 - y2;
+                  return (float) Math.sqrt(dx * dx + dy * dy);
+              }
+          
+              private static float approach(float value, float target, float amount) {
+                  if (value < target) return Math.min(target, value + amount);
+                  return Math.max(target, value - amount);
+              }
+          
+              private static float lerp(float a, float b, float p) { return a + (b - a) * p; }
+              private static float clamp01(float v) { return Math.max(0f, Math.min(1f, v)); }
+              private static int clamp(int v, int min, int max) { return Math.max(min, Math.min(max, v)); }
+          
+              private static int mixColor(int a, int b, float p) {
+                  p = clamp01(p);
+                  int ar = Color.red(a), ag = Color.green(a), ab = Color.blue(a), aa = Color.alpha(a);
+                  int br = Color.red(b), bg = Color.green(b), bb = Color.blue(b), ba = Color.alpha(b);
+                  return Color.argb((int) lerp(aa, ba, p), (int) lerp(ar, br, p),
+                          (int) lerp(ag, bg, p), (int) lerp(ab, bb, p));
+              }
+          }
+          GAME_VIEW
+
+          echo "工程生成完成：$(find generated-game/app/src -type f | wc -l) 个源码/资源文件"
+
+      - name: 编译可安装 APK
+        working-directory: generated-game
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: 整理构建产物
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p generated-game/output
+          cp generated-game/app/build/outputs/apk/debug/app-debug.apk "generated-game/output/星豆迷宫.apk"
+          sha256sum "generated-game/output/星豆迷宫.apk" | tee generated-game/output/SHA256.txt
+
+      - name: 上传星豆迷宫 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: 星豆迷宫-可安装APK
+          path: |
+            generated-game/output/星豆迷宫.apk
+            generated-game/output/SHA256.txt
+          if-no-files-found: error
+          retention-days: 30
