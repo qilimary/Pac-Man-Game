@@ -95,6 +95,13 @@ public final class GameView extends View {
         }
     }
 
+    // Palette and shaders belong only to the map picker; gameplay art is unchanged.
+    private static final Theme[] MAP_THEMES = Theme.values();
+    private static final String[] MAP_TAGS = {"欢乐派对", "街机时光", "蔚蓝假日", "灯火新年", "星际漫游", "奇妙工坊"};
+    private static final int[] MAP_INKS = {0xFF9C496C, 0xFF326FA4, 0xFF177C83, 0xFFAF5149, 0xFF7663AA, 0xFF8D6A28};
+    private static final int[] MAP_TINTS = {0xFFFFE2D4, 0xFFCEE9FC, 0xFFBEEDE6, 0xFFFFDBD0, 0xFFE1D7FC, 0xFFF7E6B5};
+    private static final String[] PLAYER_STYLE_NAMES = {"经典吃豆人", "黄色小鸟"};
+
     private enum Dir {
         NONE(0, 0), UP(0, -1), DOWN(0, 1), LEFT(-1, 0), RIGHT(1, 0);
         final int dx;
@@ -329,6 +336,8 @@ public final class GameView extends View {
     private Canvas wallCacheCanvas;
     private float wallCacheScale = 1f;
     private Shader menuShader, controlsShader, galaxyShader, heroShader;
+    private Shader mapPickerShader;
+    private final Shader[] mapCardShaders = new Shader[6];
     private int brokenWallCount;
     private int breathLabelTick = -1;
     private boolean breathLabelBubble;
@@ -527,6 +536,14 @@ public final class GameView extends View {
         controlsShader = new LinearGradient(0, controlTop, 0, h, 0xFF171D34, 0xFF080D1D, Shader.TileMode.CLAMP);
         heroShader = new RadialGradient(w * 0.5f, h * 0.295f, Math.max(1f, w * 0.48f),
                 0x455EE5CD, 0x00162A47, Shader.TileMode.CLAMP);
+        mapPickerShader = new LinearGradient(0, 0, w * 0.6f, h,
+                new int[]{0xFFEAF7FF, 0xFFF7FAFF, 0xFFE7F5EF}, null, Shader.TileMode.CLAMP);
+        for (int i = 0; i < mapCards.length; i++) {
+            RectF r = mapCards[i];
+            mapCardShaders[i] = new LinearGradient(r.left, r.top, r.right, r.bottom,
+                    mixColor(MAP_TINTS[i], Color.WHITE, 0.26f),
+                    mixColor(MAP_TINTS[i], Color.WHITE, 0.80f), Shader.TileMode.CLAMP);
+        }
         wallCacheDirty = true;
     }
 
@@ -3280,101 +3297,117 @@ public final class GameView extends View {
     }
 
     private void drawMapSelect(Canvas canvas) {
-        drawMenuBackground(canvas);
-        paint.setShader(new RadialGradient(viewW * 0.10f, viewH * 0.28f, viewW * 0.62f,
-                0x554E69D9, 0x002B1762, Shader.TileMode.CLAMP));
-        canvas.drawCircle(viewW * 0.10f, viewH * 0.28f, viewW * 0.62f, paint);
-        paint.setShader(new RadialGradient(viewW * 0.92f, viewH * 0.56f, viewW * 0.56f,
-                0x4437D6C5, 0x00164A6D, Shader.TileMode.CLAMP));
-        canvas.drawCircle(viewW * 0.92f, viewH * 0.56f, viewW * 0.56f, paint);
+        paint.setColor(Color.WHITE);
+        paint.setShader(mapPickerShader);
+        canvas.drawRect(0, 0, viewW, viewH, paint);
         paint.setShader(null);
-
-        drawBackButton(canvas, "返回");
-        drawCenteredText(canvas, "主题档案 · 06", viewW * 0.5f, viewH * 0.044f,
-                viewW * 0.020f, 0xFFD1D8F5);
+        paint.setColor(0x80FFF1B8);
+        canvas.drawCircle(viewW * 0.86f, viewH * 0.060f, viewW * 0.092f, paint);
+        drawPickerCloud(canvas, viewW * 0.81f, viewH * 0.108f, viewW * 0.11f);
+        drawPickerCloud(canvas, viewW * 0.02f, viewH * 0.130f, viewW * 0.12f);
+        drawPickerCloud(canvas, viewW * 0.91f, viewH * 0.955f, viewW * 0.19f);
+        paint.setColor(0xBCFFFFFF);
+        canvas.drawRoundRect(backButton, viewW * 0.030f, viewW * 0.030f, paint);
+        drawCenteredText(canvas, "‹  返回", backButton.centerX(),
+                backButton.centerY() + viewW * 0.009f, viewW * 0.029f, 0xFF3D697A);
+        drawCenteredText(canvas, "六个世界 · 无限探索", viewW * 0.52f, viewH * 0.045f,
+                viewW * 0.021f, 0xFF5E8999);
         textPaint.setTypeface(FONT_BOLD);
-        drawCenteredText(canvas, "选择主题地图", viewW * 0.5f, viewH * 0.086f,
-                viewW * 0.051f, Color.WHITE);
+        drawCenteredText(canvas, "选择主题地图", viewW * 0.52f, viewH * 0.086f,
+                viewW * 0.052f, 0xFF264D60);
         textPaint.setTypeface(FONT_NORMAL);
-        drawCenteredText(canvas, "完整地图会等比例呈现，每局地形与视觉尺寸都会轻微变化", viewW * 0.5f,
-                viewH * 0.119f, viewW * 0.0205f, 0xFFE0E4F8);
-        Theme[] themes = Theme.values();
-        for (int i = 0; i < themes.length; i++) drawMapCard(canvas, mapCards[i], themes[i], i);
+        drawCenteredText(canvas, "挑选一个世界，和小跟班一起出发", viewW * 0.5f,
+                viewH * 0.119f, viewW * 0.024f, 0xFF5B7E8F);
+        for (int i = 0; i < MAP_THEMES.length; i++) drawMapCard(canvas, mapCards[i], MAP_THEMES[i], i);
         drawGameSettings(canvas);
+        drawCenteredText(canvas, "每次出发，都会遇见新的迷宫", viewW * 0.5f,
+                viewH * 0.900f, viewW * 0.023f, 0xFF58817C);
+        for (int i = 0; i < 7; i++) {
+            paint.setColor(i % 2 == 0 ? 0xFFB1DAD0 : 0xFFEDD696);
+            canvas.drawCircle(viewW * (0.39f + i * 0.037f), viewH * 0.928f, viewW * 0.004f, paint);
+        }
+        drawPacShape(canvas, viewW * 0.355f, viewH * 0.928f, viewW * 0.020f, Dir.RIGHT, 0xFFF2BF48);
+    }
+
+    private void drawPickerCloud(Canvas canvas, float x, float y, float r) {
+        paint.setColor(0xB8FFFFFF);
+        canvas.drawCircle(x - r * 0.42f, y, r * 0.34f, paint);
+        canvas.drawCircle(x, y - r * 0.18f, r * 0.45f, paint);
+        canvas.drawCircle(x + r * 0.45f, y, r * 0.30f, paint);
+        tmpRect.set(x - r * 0.55f, y, x + r * 0.55f, y + r * 0.27f);
+        canvas.drawRoundRect(tmpRect, r * 0.16f, r * 0.16f, paint);
     }
 
     private void drawGameSettings(Canvas canvas) {
-        float top = viewH * 0.615f;
-        float bottom = viewH * 0.862f;
+        float top = viewH * 0.615f, bottom = viewH * 0.862f;
         tmpRect.set(viewW * 0.055f, top + viewH * 0.004f, viewW * 0.945f, bottom + viewH * 0.004f);
-        paint.setColor(0x3D000000);
-        canvas.drawRoundRect(tmpRect, viewW * 0.027f, viewW * 0.027f, paint);
+        paint.setColor(0x12377489);
+        canvas.drawRoundRect(tmpRect, viewW * 0.033f, viewW * 0.033f, paint);
         tmpRect.set(viewW * 0.055f, top, viewW * 0.945f, bottom);
-        paint.setShader(new LinearGradient(tmpRect.left, tmpRect.top, tmpRect.right, tmpRect.bottom,
-                new int[]{0xD94B3B79, 0xD92B456F, 0xD9235271},
-                new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
-        canvas.drawRoundRect(tmpRect, viewW * 0.027f, viewW * 0.027f, paint);
-        paint.setShader(null);
-        strokePaint.setColor(0x557D9AD0);
-        strokePaint.setStrokeWidth(viewW * 0.0018f);
-        canvas.drawRoundRect(tmpRect, viewW * 0.027f, viewW * 0.027f, strokePaint);
-
+        paint.setColor(0xF5FFFFFF);
+        canvas.drawRoundRect(tmpRect, viewW * 0.033f, viewW * 0.033f, paint);
+        strokePaint.setStrokeWidth(Math.max(1f, viewW * 0.0015f));
+        strokePaint.setColor(0xFFE0ECEF);
+        canvas.drawRoundRect(tmpRect, viewW * 0.033f, viewW * 0.033f, strokePaint);
+        textPaint.setTypeface(FONT_BOLD);
         drawLeftText(canvas, "本局设置", viewW * 0.082f, top + viewH * 0.028f,
-                viewW * 0.027f, Color.WHITE);
-        drawLeftText(canvas, "生命 1—5", viewW * 0.082f, top + viewH * 0.048f,
-                viewW * 0.0175f, 0xFFD2D9F0);
-        RectF lifeSurface = new RectF(viewW * 0.072f, lifeMinusButton.top - viewH * 0.002f,
+                viewW * 0.029f, 0xFF304F62);
+        textPaint.setTypeface(FONT_NORMAL);
+        drawLeftText(canvas, "按你的节奏来", viewW * 0.72f, top + viewH * 0.027f,
+                viewW * 0.018f, 0xFF719199);
+        drawLeftText(canvas, "生命 1—5", viewW * 0.082f, top + viewH * 0.047f,
+                viewW * 0.020f, 0xFF627F8A);
+        tmpRect.set(viewW * 0.072f, lifeMinusButton.top - viewH * 0.002f,
                 viewW * 0.370f, lifeMinusButton.bottom + viewH * 0.002f);
-        paint.setColor(0x55404E78);
-        canvas.drawRoundRect(lifeSurface, viewW * 0.018f, viewW * 0.018f, paint);
-        drawRoundedButton(canvas, lifeMinusButton, "−", 0x5B505C86, Color.WHITE);
+        paint.setColor(0xFFF0F6F8);
+        canvas.drawRoundRect(tmpRect, viewW * 0.021f, viewW * 0.021f, paint);
+        drawRoundedButton(canvas, lifeMinusButton, "−", 0xFFE0EDF1, configuredLives == 1 ? 0xFF97ABB2 : 0xFF3B6B7C);
+        drawRoundedButton(canvas, lifePlusButton, "+", 0xFFE0EDF1, configuredLives == 5 ? 0xFF97ABB2 : 0xFF3B6B7C);
+        textPaint.setTypeface(FONT_BOLD);
         drawCenteredText(canvas, String.valueOf(configuredLives), viewW * 0.220f,
-                lifeSurface.centerY() + viewW * 0.010f, viewW * 0.038f, 0xFFFFD468);
-        drawRoundedButton(canvas, lifePlusButton, "+", 0x5B505C86, Color.WHITE);
-
-        drawLeftText(canvas, "难度", viewW * 0.445f, top + viewH * 0.048f,
-                viewW * 0.0175f, 0xFFD2D9F0);
-        int diffColor = difficulty == Difficulty.EASY ? 0xFF83E3B4
-                : difficulty == Difficulty.HARD ? 0xFFFF91AA : 0xFF8BB3FF;
-        paint.setColor(difficulty == Difficulty.EASY ? 0x5B52A98A
-                : difficulty == Difficulty.HARD ? 0x5B6A395B : 0x5B5067A1);
-        canvas.drawRoundRect(difficultyButton, viewW * 0.018f, viewW * 0.018f, paint);
-        strokePaint.setColor(Color.argb(100, Color.red(diffColor), Color.green(diffColor), Color.blue(diffColor)));
-        strokePaint.setStrokeWidth(viewW * 0.0018f);
-        canvas.drawRoundRect(difficultyButton, viewW * 0.018f, viewW * 0.018f, strokePaint);
+                lifeMinusButton.centerY() + viewW * 0.013f, viewW * 0.042f, 0xFF287C7A);
+        textPaint.setTypeface(FONT_NORMAL);
+        drawLeftText(canvas, "难度", viewW * 0.445f, top + viewH * 0.047f,
+                viewW * 0.020f, 0xFF627F8A);
+        int diffColor = difficulty == Difficulty.EASY ? 0xFF278366
+                : difficulty == Difficulty.HARD ? 0xFFAB5675 : 0xFF487DB1;
+        paint.setColor(mixColor(diffColor, Color.WHITE, 0.92f));
+        canvas.drawRoundRect(difficultyButton, viewW * 0.021f, viewW * 0.021f, paint);
         String enemyCount = difficulty == Difficulty.EASY ? "三名敌人"
                 : difficulty == Difficulty.HARD ? "五名敌人" : "四名敌人";
         drawLeftText(canvas, difficulty.label + " · " + enemyCount,
-                difficultyButton.left + viewW * 0.020f,
-                difficultyButton.centerY() - viewH * 0.002f,
-                viewW * 0.0235f, Color.WHITE);
+                difficultyButton.left + viewW * 0.021f, difficultyButton.centerY() - viewH * 0.002f,
+                viewW * 0.024f, 0xFF344F62);
         drawLeftText(canvas, difficulty.description,
-                difficultyButton.left + viewW * 0.020f,
-                difficultyButton.centerY() + viewH * 0.015f,
-                viewW * 0.0155f, 0xFFD0D6EE);
+                difficultyButton.left + viewW * 0.021f, difficultyButton.centerY() + viewH * 0.015f,
+                viewW * 0.017f, 0xFF627F8A);
         drawCenteredText(canvas, "›", difficultyButton.right - viewW * 0.028f,
                 difficultyButton.centerY() + viewW * 0.010f, viewW * 0.034f, diffColor);
-
-        drawLeftText(canvas, "玩家形象", viewW * 0.082f, viewH * 0.758f,
-                viewW * 0.021f, 0xFFE7E9F8);
-        String[] styleNames = {"经典吃豆人", "黄色小鸟"};
+        strokePaint.setColor(0xFFE8F0F1);
+        canvas.drawLine(viewW * 0.082f, viewH * 0.739f, viewW * 0.918f, viewH * 0.739f, strokePaint);
+        drawLeftText(canvas, "玩家形象", viewW * 0.082f, viewH * 0.760f,
+                viewW * 0.023f, 0xFF466778);
         for (int i = 0; i < playerStyleButtons.length; i++) {
             RectF r = playerStyleButtons[i];
             boolean selected = playerStyle == i;
-            paint.setColor(selected ? 0x705F75B4 : 0x45404D73);
-            canvas.drawRoundRect(r, viewW * 0.017f, viewW * 0.017f, paint);
-            strokePaint.setColor(selected ? 0xFFFFD468 : 0x557E88AE);
-            strokePaint.setStrokeWidth(viewW * (selected ? 0.003f : 0.0016f));
-            canvas.drawRoundRect(r, viewW * 0.017f, viewW * 0.017f, strokePaint);
-            float ix = r.centerX();
-            float iy = r.centerY() - viewH * 0.008f;
-            drawPlayerStylePreview(canvas, i, ix, iy, viewW * 0.026f);
-            drawCenteredFittedText(canvas, styleNames[i], ix, r.bottom - viewH * 0.008f,
-                    viewW * 0.015f, selected ? 0xFFFFE49A : 0xFFE0E3F3, r.width() * 0.88f);
+            paint.setColor(selected ? 0xFFE6F5ED : 0xFFF5F8FA);
+            canvas.drawRoundRect(r, viewW * 0.022f, viewW * 0.022f, paint);
+            strokePaint.setColor(selected ? 0xFF63AF96 : 0xFFE3EBEE);
+            strokePaint.setStrokeWidth(viewW * (selected ? 0.0025f : 0.0015f));
+            canvas.drawRoundRect(r, viewW * 0.022f, viewW * 0.022f, strokePaint);
+            drawPlayerStylePreview(canvas, i, r.centerX(), r.centerY() - viewH * 0.007f, viewW * 0.027f);
+            drawCenteredFittedText(canvas, PLAYER_STYLE_NAMES[i], r.centerX(), r.bottom - viewH * 0.008f,
+                    viewW * 0.018f, selected ? 0xFF327D65 : 0xFF647F8C, r.width() * 0.85f);
+            if (selected) {
+                float x = r.right - viewW * 0.025f, y = r.top + viewW * 0.025f;
+                paint.setColor(0xFF57A58D); canvas.drawCircle(x, y, viewW * 0.012f, paint);
+                strokePaint.setColor(Color.WHITE); strokePaint.setStrokeWidth(viewW * 0.002f);
+                path.reset(); path.moveTo(x - viewW * 0.005f, y);
+                path.lineTo(x - viewW * 0.001f, y + viewW * 0.004f);
+                path.lineTo(x + viewW * 0.006f, y - viewW * 0.005f); canvas.drawPath(path, strokePaint);
+            }
         }
-
     }
-
 
     private void drawExpertAiCompanion(Canvas canvas, float x, float y, float r, Dir dir) {
         float angle = dir == Dir.UP ? -90f : dir == Dir.DOWN ? 90f : dir == Dir.LEFT ? 180f : 0f;
@@ -3419,71 +3452,117 @@ public final class GameView extends View {
     }
 
     private void drawMapCard(Canvas canvas, RectF r, Theme t, int index) {
-        float radius = viewW * 0.025f;
-        tmpRect.set(r.left, r.top + viewH * 0.004f, r.right, r.bottom + viewH * 0.004f);
-        paint.setColor(0x55000000);
+        float radius = viewW * 0.029f;
+        tmpRect.set(r.left, r.top + viewH * 0.0035f, r.right, r.bottom + viewH * 0.0035f);
+        paint.setColor(0x19367487);
         canvas.drawRoundRect(tmpRect, radius, radius, paint);
-
-        int topColor = mixColor(t.dark, Color.WHITE, 0.18f);
-        int bottomColor = mixColor(t.dark, 0xFF10213C, 0.24f);
-        paint.setShader(new LinearGradient(r.left, r.top, r.right, r.bottom,
-                new int[]{topColor, t.dark, bottomColor},
-                new float[]{0f, 0.54f, 1f}, Shader.TileMode.CLAMP));
+        paint.setColor(Color.WHITE);
+        paint.setShader(mapCardShaders[index]);
         canvas.drawRoundRect(r, radius, radius, paint);
         paint.setShader(null);
-
-        tmpRect.set(r.left, r.top + radius, r.left + viewW * 0.007f, r.bottom - radius);
-        paint.setColor(Color.argb(225, Color.red(t.accent), Color.green(t.accent), Color.blue(t.accent)));
-        canvas.drawRoundRect(tmpRect, viewW * 0.004f, viewW * 0.004f, paint);
-        strokePaint.setStrokeWidth(viewW * 0.0017f);
-        strokePaint.setColor(Color.argb(100, Color.red(t.accent), Color.green(t.accent), Color.blue(t.accent)));
+        strokePaint.setStrokeWidth(Math.max(1f, viewW * 0.002f));
+        strokePaint.setColor(0xE6FFFFFF);
         canvas.drawRoundRect(r, radius, radius, strokePaint);
-
-        String[] tags = {"狂欢", "经典", "潮汐", "新春", "深空", "工业"};
-        RectF tag = new RectF(r.left + viewW * 0.020f, r.top + viewH * 0.010f,
-                r.left + viewW * 0.103f, r.top + viewH * 0.034f);
-        paint.setColor(Color.argb(48, Color.red(t.accent), Color.green(t.accent), Color.blue(t.accent)));
-        canvas.drawRoundRect(tag, tag.height() * 0.5f, tag.height() * 0.5f, paint);
-        drawCenteredText(canvas, tags[index], tag.centerX(), tag.centerY() + viewW * 0.005f,
-                viewW * 0.015f, t.accent);
-
-        float iconX = r.centerX();
-        float iconY = r.top + r.height() * 0.31f;
-        float size = Math.min(r.width(), r.height()) * 0.18f;
-        paint.setShader(new RadialGradient(iconX, iconY, size * 2.1f,
-                Color.argb(70, Color.red(t.accent), Color.green(t.accent), Color.blue(t.accent)),
-                Color.TRANSPARENT, Shader.TileMode.CLAMP));
-        canvas.drawCircle(iconX, iconY, size * 2.1f, paint);
-        paint.setShader(null);
-        paint.setColor(0x2FFFFFFF);
-        canvas.drawCircle(iconX, iconY, size * 1.38f, paint);
-        switch (index) {
-            case 0: drawMiniClown(canvas, iconX, iconY, size * 0.92f); break;
-            case 1: drawPacShape(canvas, iconX, iconY, size * 0.78f, Dir.RIGHT, 0xFFFFD84A); break;
-            case 2: drawFish(canvas, iconX, iconY, size * 1.10f, 0xFF56D8FF, false, 0, Dir.RIGHT); break;
-            case 3: drawFirecracker(canvas, iconX, iconY, size * 0.84f, true); break;
-            case 4: drawPlanet(canvas, iconX, iconY, size * 0.80f, 0xFFA999FF); break;
-            case 5: drawFactoryIcon(canvas, iconX, iconY, size * 0.92f); break;
-        }
-
+        tmpRect.set(r.left + viewW * 0.019f, r.top + r.height() * 0.074f,
+                r.left + viewW * 0.139f, r.top + r.height() * 0.239f);
+        paint.setColor(0xB0FFFFFF);
+        canvas.drawRoundRect(tmpRect, tmpRect.height() / 2f, tmpRect.height() / 2f, paint);
+        drawCenteredText(canvas, MAP_TAGS[index], tmpRect.centerX(), tmpRect.centerY() + viewW * 0.005f,
+                viewW * 0.016f, MAP_INKS[index]);
+        drawCenteredText(canvas, "0" + (index + 1), r.right - viewW * 0.031f,
+                r.top + r.height() * 0.18f, viewW * 0.017f, MAP_INKS[index]);
+        float iconX = r.centerX(), iconY = r.top + r.height() * 0.33f;
+        float size = Math.min(r.width(), r.height()) * 0.188f;
+        drawPickerIllustration(canvas, iconX, iconY, size, index);
         textPaint.setTypeface(FONT_BOLD);
-        drawCenteredText(canvas, t.title, r.centerX(), r.top + r.height() * 0.61f,
-                viewW * 0.030f, Color.WHITE);
+        drawCenteredText(canvas, t.title, r.centerX(), r.top + r.height() * 0.615f,
+                viewW * 0.031f, 0xFF304C60);
         textPaint.setTypeface(FONT_NORMAL);
-        drawCenteredFittedText(canvas, t.subtitle, r.centerX(), r.top + r.height() * 0.76f,
-                viewW * 0.0168f, 0xFFF0F2FF, r.width() * 0.88f);
+        drawCenteredFittedText(canvas, t.subtitle, r.centerX(), r.top + r.height() * 0.757f,
+                viewW * 0.017f, 0xFF5F7684, r.width() * 0.88f);
         int best = prefs.getInt("最高分_" + index, 0);
-        RectF scoreChip = new RectF(r.centerX() - r.width() * 0.27f,
-                r.top + r.height() * 0.835f,
-                r.centerX() + r.width() * 0.27f,
-                r.top + r.height() * 0.965f);
-        paint.setColor(0x2A101526);
-        canvas.drawRoundRect(scoreChip, scoreChip.height() * 0.5f, scoreChip.height() * 0.5f, paint);
-        drawCenteredText(canvas, best > 0 ? "最高分 " + best : "轻触开始",
-                scoreChip.centerX(), scoreChip.centerY() + viewW * 0.0048f,
-                viewW * 0.0155f, t.accent);
+        tmpRect.set(r.left + r.width() * 0.23f, r.top + r.height() * 0.823f,
+                r.right - r.width() * 0.23f, r.top + r.height() * 0.953f);
+        paint.setColor(0xBAFFFFFF);
+        canvas.drawRoundRect(tmpRect, tmpRect.height() * 0.5f, tmpRect.height() * 0.5f, paint);
+        drawCenteredText(canvas, best > 0 ? "最高分 " + best + "  ›" : "即刻出发  ›",
+                r.centerX(), tmpRect.centerY() + viewW * 0.005f, viewW * 0.0165f, MAP_INKS[index]);
     }
 
+    private void drawPickerIllustration(Canvas canvas, float x, float y, float r, int index) {
+        paint.setColor(0x9CFFFFFF);
+        canvas.drawCircle(x, y, r * 1.35f, paint);
+        strokePaint.setStrokeWidth(r * 0.08f);
+        strokePaint.setStrokeCap(Paint.Cap.ROUND);
+        if (index == 0) {
+            for (int side = -1; side <= 1; side += 2) {
+                float bx = x + side * r * 2.20f, by = y - r * 0.18f;
+                strokePaint.setColor(0xFFBA8E9A);
+                canvas.drawLine(bx, by, bx - side * r * 0.12f, by + r * 0.9f, strokePaint);
+                paint.setColor(side < 0 ? 0xFFF9B861 : 0xFF73CDBA);
+                tmpRect.set(bx - r * 0.23f, by - r * 0.39f, bx + r * 0.23f, by + r * 0.21f);
+                canvas.drawOval(tmpRect, paint);
+            }
+            drawMiniClown(canvas, x, y + r * 0.04f, r * 0.82f);
+            strokePaint.setStrokeWidth(r * 0.055f); strokePaint.setColor(0xFFC66772);
+            tmpRect.set(x - r * 0.23f, y + r * 0.20f, x + r * 0.23f, y + r * 0.48f);
+            canvas.drawArc(tmpRect, 10, 160, false, strokePaint);
+            paint.setColor(0xFFF7CA5C); canvas.drawCircle(x, y - r * 1.1f, r * 0.11f, paint);
+        } else if (index == 1) {
+            strokePaint.setColor(0xFF98C8EA); strokePaint.setStrokeWidth(r * 0.095f);
+            for (int side = -1; side <= 1; side += 2) {
+                path.reset(); path.moveTo(x + side * r * 2.5f, y - r * 0.60f);
+                path.lineTo(x + side * r * 1.5f, y - r * 0.60f);
+                path.lineTo(x + side * r * 1.5f, y + r * 0.70f);
+                path.lineTo(x + side * r * 2.5f, y + r * 0.70f); canvas.drawPath(path, strokePaint);
+            }
+            drawPacShape(canvas, x - r * 0.1f, y, r * 0.78f, Dir.RIGHT, 0xFFF5C642);
+            for (int n = 0; n < 3; n++) {paint.setColor(0xFFE3A954); canvas.drawCircle(x + r * (1.03f + n * 0.4f), y, r * 0.08f, paint);}
+        } else if (index == 2) {
+            for (int line = 0; line < 2; line++) {
+                strokePaint.setColor(line == 0 ? 0xFF89D6D1 : 0xFFAFE6DD);
+                strokePaint.setStrokeWidth(r * 0.075f); path.reset();
+                path.moveTo(x - r * 2.4f, y + r * (0.6f + line * 0.28f));
+                path.cubicTo(x - r, y + r * (0.15f + line * 0.28f), x + r, y + r * (1.05f + line * 0.28f), x + r * 2.4f, y + r * (0.6f + line * 0.28f));
+                canvas.drawPath(path, strokePaint);
+            }
+            drawFish(canvas, x, y, r * 1.12f, 0xFF36BDD0, false, 0, Dir.RIGHT);
+            strokePaint.setColor(0xFF8BCED2); strokePaint.setStrokeWidth(r * 0.04f);
+            canvas.drawCircle(x + r * 1.65f, y - r * 0.25f, r * 0.13f, strokePaint);
+            canvas.drawCircle(x + r * 1.98f, y - r * 0.68f, r * 0.09f, strokePaint);
+        } else if (index == 3) {
+            strokePaint.setColor(0xFFE8B86B); strokePaint.setStrokeWidth(r * 0.06f);
+            canvas.drawLine(x, y - r * 1.13f, x, y - r * 0.75f, strokePaint);
+            paint.setColor(0xFFF1796E); tmpRect.set(x - r * 0.73f, y - r * 0.72f, x + r * 0.73f, y + r * 0.62f);
+            canvas.drawOval(tmpRect, paint);
+            strokePaint.setColor(0xFFFFB3A0); strokePaint.setStrokeWidth(r * 0.07f);
+            tmpRect.set(x - r * 0.34f, y - r * 0.70f, x + r * 0.34f, y + r * 0.60f); canvas.drawOval(tmpRect, strokePaint);
+            paint.setColor(0xFFF4C35E);
+            tmpRect.set(x - r * 0.36f, y - r * 0.81f, x + r * 0.36f, y - r * 0.64f); canvas.drawRoundRect(tmpRect,r*.06f,r*.06f,paint);
+            tmpRect.set(x - r * 0.36f, y + r * 0.56f, x + r * 0.36f, y + r * 0.72f); canvas.drawRoundRect(tmpRect,r*.06f,r*.06f,paint);
+            strokePaint.setColor(0xFFECA35C); canvas.drawLine(x,y+r*.72f,x,y+r*.91f,strokePaint);
+            drawCenteredText(canvas, "福", x, y + r * 0.21f, r * 0.57f, 0xFFFFE4AD);
+        } else if (index == 4) {
+            drawPlanet(canvas, x, y, r * 0.83f, 0xFFA791E5);
+            paint.setColor(0xFFDBC77A); canvas.drawCircle(x - r * 2.05f, y - r * 0.48f, r * 0.18f, paint);
+            paint.setColor(0xFFBAAEDB); canvas.drawCircle(x + r * 2.15f, y + r * 0.42f, r * 0.10f, paint);
+        } else {
+            for (int side=-1;side<=1;side+=2) {
+                float gx=x+side*r*2.13f, gy=y+r*.22f;
+                strokePaint.setColor(0xFFD4B978);strokePaint.setStrokeWidth(r*.10f);
+                canvas.drawCircle(gx,gy,r*.25f,strokePaint);
+                for(int a=0;a<8;a++) {double angle=a*Math.PI/4;float dx=(float)Math.cos(angle),dy=(float)Math.sin(angle);
+                    canvas.drawLine(gx+dx*r*.30f,gy+dy*r*.30f,gx+dx*r*.41f,gy+dy*r*.41f,strokePaint);}
+            }
+            drawFactoryIcon(canvas,x,y,r*.99f);
+        }
+        strokePaint.setColor(mixColor(MAP_INKS[index], Color.WHITE, 0.38f));
+        strokePaint.setStrokeWidth(r * 0.045f);
+        float sx=x+r*1.60f, sy=y-r*.70f;
+        canvas.drawLine(sx-r*.10f,sy,sx+r*.10f,sy,strokePaint);
+        canvas.drawLine(sx,sy-r*.13f,sx,sy+r*.13f,strokePaint);
+        strokePaint.setStrokeCap(Paint.Cap.BUTT);
+    }
 
     private int[] chooseFactoryManufacturingPoint() {
         List<int[]> candidates = new ArrayList<>();
