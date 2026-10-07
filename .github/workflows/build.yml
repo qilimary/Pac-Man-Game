@@ -9,6 +9,7 @@ on:
       - ".github/workflows/GameView.java"
       - "*.png"
       - "*.jpg"
+      - "*.jpeg"
       - "*.webp"
   pull_request:
     branches: ["main"]
@@ -28,6 +29,18 @@ jobs:
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
+      - name: 检查拆分文件并生成工程
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source_file in generate.sh GameView.java; do
+            if [[ ! -s ".github/workflows/$source_file" ]]; then
+              echo "::error::缺少 .github/workflows/$source_file，请保留原文件名并将三份文件放在同一目录。"
+              exit 1
+            fi
+          done
+          bash -n .github/workflows/generate.sh
+          bash .github/workflows/generate.sh
       - name: 配置 JDK 17
         uses: actions/setup-java@v4
         with:
@@ -35,20 +48,14 @@ jobs:
           java-version: "17"
       - name: 配置 Android SDK
         uses: android-actions/setup-android@v3
-      - name: 安装 Android 36 编译组件
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+        with:
+          # v3 默认包含已下架的 tools；显式覆盖，不能只在后续步骤补装组件。
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+          log-accepted-android-sdk-licenses: "false"
       - name: 配置 Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.4.1"
-      - name: 检查拆分文件并生成工程
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s .github/workflows/generate.sh
-          test -s .github/workflows/GameView.java
-          bash -n .github/workflows/generate.sh
-          bash .github/workflows/generate.sh
       - name: 验证真实游戏逻辑并编译 APK
         working-directory: generated-game
         run: gradle --no-daemon --console=plain --stacktrace :app:testDebugUnitTest :app:assembleDebug
