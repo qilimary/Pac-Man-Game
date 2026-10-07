@@ -1,0 +1,77 @@
+name: 构建星豆迷宫 APK
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/build.yml"
+      - ".github/workflows/generate.sh"
+      - ".github/workflows/GameView.java"
+      - "*.png"
+      - "*.jpg"
+      - "*.webp"
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xingdou-maze-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
+      - name: 安装 Android 36 编译组件
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: 配置 Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.4.1"
+      - name: 检查拆分文件并生成工程
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s .github/workflows/generate.sh
+          test -s .github/workflows/GameView.java
+          bash -n .github/workflows/generate.sh
+          bash .github/workflows/generate.sh
+      - name: 验证真实游戏逻辑并编译 APK
+        working-directory: generated-game
+        run: gradle --no-daemon --console=plain --stacktrace :app:testDebugUnitTest :app:assembleDebug
+      - name: 保存测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 星豆迷宫-回归测试报告
+          path: generated-game/app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: 整理安装包
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p generated-game/output
+          cp generated-game/app/build/outputs/apk/debug/app-debug.apk "generated-game/output/星豆迷宫.apk"
+          cd generated-game/output
+          sha256sum 星豆迷宫.apk > SHA256.txt
+      - name: 保存安装包
+        uses: actions/upload-artifact@v4
+        with:
+          name: 星豆迷宫-1.20.0
+          path: generated-game/output/
+          if-no-files-found: error
+          retention-days: 30
